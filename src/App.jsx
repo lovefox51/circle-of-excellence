@@ -1338,13 +1338,15 @@ function MainApp({ profile, onSignOut }) {
   const pncBadge = profile.roles.includes("pnc") ? nominations.filter((n) => n.status === "submitted").length : 0;
   const gmBadge = profile.roles.includes("gm") ? nominations.filter((n) => n.status === "with_gm").length : 0;
 
+    const canSeeDashboard = profile.roles.includes("pnc") || profile.roles.includes("gm");
+
   const tabs = [
     { key: "new", label: "New Nomination", icon: PlusCircle },
     { key: "pnc", label: "P&C Queue", icon: Send, badge: pncBadge },
     { key: "gm", label: "GM Selection", icon: Crown, badge: gmBadge },
-    { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    ...(canSeeDashboard ? [{ key: "dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
   ];
-
+  
   return (
     <div style={{ background: COLORS.bg, minHeight: "100vh" }}>
       <div className="max-w-5xl mx-auto rounded-2xl overflow-hidden" style={{ background: COLORS.bg }}>
@@ -1406,8 +1408,10 @@ function MainApp({ profile, onSignOut }) {
             <PncQueueView profile={profile} nominations={nominations} refresh={loadData} />
           ) : tab === "gm" ? (
             <GmSelectionView profile={profile} nominations={nominations} refresh={loadData} />
-          ) : (
+                    ) : canSeeDashboard ? (
             <DashboardView nominations={nominations} />
+          ) : (
+            <EmptyState icon={LayoutDashboard} title="Not available" body="This view isn't part of your role." />
           )}
         </div>
 
