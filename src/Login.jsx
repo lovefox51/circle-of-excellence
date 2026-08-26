@@ -52,7 +52,9 @@ export default function Login() {
             style={{ background: `linear-gradient(135deg, ${COLORS.gold}, ${COLORS.hero})` }}
           >
             <Sparkles size={18} color="#1A1406" />
-          </span>
+          </span>          <p className="text-xs uppercase tracking-[0.2em] mb-1" style={{ color: COLORS.gold }}>
+            Radisson Blu Hotel Doha
+          </p>
           <h1 className="text-lg font-semibold" style={{ color: COLORS.text, fontFamily: "Fraunces, serif" }}>
             Circle of Excellence
           </h1>
