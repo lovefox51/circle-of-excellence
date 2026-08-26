@@ -18,7 +18,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
-import { fetchNominations, fetchMyProfile, insertNomination, forwardNomination, forwardAllPending, selectWinner } from "./db";
+import { fetchNominations, fetchMyProfile, insertNomination, forwardNomination, forwardAllPending, selectWinner, finalizeChampionSelections } from "./db";
 import Login from "./Login";
 
 /* ---------------------------------------------------------------------- */
@@ -158,8 +158,18 @@ const STATUS_META = {
   submitted: { label: "Awaiting P&C", bg: "rgba(216,170,78,0.16)", fg: COLORS.gold },
   with_gm: { label: "With General Manager", bg: "rgba(95,148,196,0.18)", fg: COLORS.champion },
   winner: { label: "Winner", bg: "rgba(95,184,138,0.16)", fg: COLORS.good },
+  runner_up: { label: "Runner-up", bg: "rgba(165,131,214,0.18)", fg: COLORS.shiningStar },
   not_selected: { label: "Not Selected", bg: "rgba(108,116,150,0.16)", fg: COLORS.textFaint },
 };
+
+const DIVISION_LABEL = { foh: "Front of the House", boh: "Back of the House" };
+
+const CHAMPION_SLOTS = [
+  { key: "foh_winner", division: "foh", rank: "winner", label: "Front of the House — Winner" },
+  { key: "foh_runner_up", division: "foh", rank: "runner_up", label: "Front of the House — Runner-up" },
+  { key: "boh_winner", division: "boh", rank: "winner", label: "Back of the House — Winner" },
+  { key: "boh_runner_up", division: "boh", rank: "runner_up", label: "Back of the House — Runner-up" },
+];
 
 /* ---------------------------------------------------------------------- */
 /*  Helpers                                                                 */
@@ -927,7 +937,12 @@ function NominationDetail({ record }) {
         )}
         {record.decidedAt && (
           <div>
-            {record.status === "winner" ? "Selected as winner" : "Not selected"} on {formatDate(record.decidedAt)} by {record.decidedBy}
+            {record.status === "winner"
+              ? `Selected as winner${record.division ? ` (${DIVISION_LABEL[record.division]})` : ""}`
+              : record.status === "runner_up"
+              ? `Selected as runner-up${record.division ? ` (${DIVISION_LABEL[record.division]})` : ""}`
+              : "Not selected"}{" "}
+            on {formatDate(record.decidedAt)} by {record.decidedBy}
           </div>
         )}
       </div>
@@ -1049,6 +1064,160 @@ function PncQueueView({ profile, nominations, refresh }) {
 /*  GM Selection — pick one winner per tier, per month                     */
 /* ---------------------------------------------------------------------- */
 
+function ChampionSelectionPanel({ month, candidates, decided, finalized, onFinalize, busy }) {
+  const [assignments, setAssignments] = useState({});
+  const [expandedId, setExpandedId] = useState(null);
+
+  if (finalized.length > 0) {
+    return (
+      <div>
+        <div className="grid sm:grid-cols-2 gap-3 mb-3">
+          {CHAMPION_SLOTS.map((slot) => {
+            const person = finalized.find((f) => f.status === slot.rank && f.division === slot.division);
+            const expanded = person && expandedId === person.id;
+            return (
+              <div key={slot.key} className="rounded-xl overflow-hidden" style={{ background: `${COLORS.good}16`, border: `1px solid ${COLORS.good}55` }}>
+                <button
+                  className="w-full text-left p-3"
+                  disabled={!person}
+                  onClick={() => person && setExpandedId(expanded ? null : person.id)}
+                >
+                  <div className="text-[11px] font-semibold mb-1" style={{ color: COLORS.good }}>
+                    {slot.label}
+                  </div>
+                  {person ? (
+                    <>
+                      <div className="font-semibold text-sm" style={{ color: COLORS.text }}>
+                        {person.nominee.name}
+                      </div>
+                      <div className="text-xs" style={{ color: COLORS.textMuted }}>
+                        {person.department}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-xs" style={{ color: COLORS.textFaint }}>
+                      Not assigned
+                    </div>
+                  )}
+                </button>
+                {expanded && <NominationDetail record={person} />}
+              </div>
+            );
+          })}
+        </div>
+        {decided.length > 0 && (
+          <details className="mt-2">
+            <summary className="text-xs cursor-pointer" style={{ color: COLORS.textFaint }}>
+              {decided.length} not selected
+            </summary>
+            <div className="mt-2 space-y-1.5">
+              {decided.map((c) => {
+                const expanded = expandedId === c.id;
+                return (
+                  <div key={c.id} className="rounded-lg overflow-hidden" style={{ background: COLORS.panelAlt }}>
+                    <button
+                      className="w-full text-left text-xs px-3 py-2 flex justify-between items-center"
+                      style={{ color: COLORS.textMuted }}
+                      onClick={() => setExpandedId(expanded ? null : c.id)}
+                    >
+                      <span>{c.nominee.name}</span>
+                      <span>{c.department}</span>
+                    </button>
+                    {expanded && <NominationDetail record={c} />}
+                  </div>
+                );
+              })}
+            </div>
+          </details>
+        )}
+      </div>
+    );
+  }
+
+  if (candidates.length === 0) {
+    return (
+      <p className="text-sm py-6 text-center" style={{ color: COLORS.textFaint }}>
+        No candidates forwarded yet for {formatMonthLabel(month)}.
+      </p>
+    );
+  }
+
+  const usedIds = new Set(Object.values(assignments).filter(Boolean));
+  const canFinalize = Object.values(assignments).some(Boolean);
+
+  function optionsFor(slotKey) {
+    return candidates.filter((c) => !usedIds.has(c.id) || assignments[slotKey] === c.id);
+  }
+
+  return (
+    <div>
+      <p className="text-xs mb-3" style={{ color: COLORS.textFaint }}>
+        Decide which nominees are Front of the House (guest-facing) and which are Back of the House, then assign a Winner and a Runner-up in each.
+      </p>
+      <div className="grid sm:grid-cols-2 gap-3 mb-4">
+        {CHAMPION_SLOTS.map((slot) => (
+          <div key={slot.key} className="rounded-xl p-3" style={{ background: COLORS.panelAlt, border: `1px solid ${COLORS.hairline}` }}>
+            <div className="text-[11px] font-semibold mb-2" style={{ color: COLORS.goldSoft }}>
+              {slot.label}
+            </div>
+            <select
+              value={assignments[slot.key] || ""}
+              onChange={(e) => setAssignments((a) => ({ ...a, [slot.key]: e.target.value || undefined }))}
+              style={inputStyle}
+            >
+              <option value="">— none —</option>
+              {optionsFor(slot.key).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nominee.name} — {c.department}
+                </option>
+              ))}
+            </select>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2.5 mb-4">
+        {candidates.map((c) => {
+          const expanded = expandedId === c.id;
+          return (
+            <div key={c.id} className="rounded-xl overflow-hidden" style={{ background: COLORS.panelAlt, border: `1px solid ${COLORS.hairline}` }}>
+              <button className="w-full text-left p-3 flex items-center justify-between gap-3" onClick={() => setExpandedId(expanded ? null : c.id)}>
+                <div className="flex items-center gap-2">
+                  <ChevronDown size={14} style={{ color: COLORS.textFaint, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                  <div>
+                    <div className="font-semibold text-sm" style={{ color: COLORS.text }}>
+                      {c.nominee.name}
+                    </div>
+                    <div className="text-xs" style={{ color: COLORS.textMuted }}>
+                      {c.department} · {c.nominee.position}
+                    </div>
+                  </div>
+                </div>
+                {usedIds.has(c.id) && (
+                  <span className="text-[10px] font-semibold px-2 py-1 rounded-full whitespace-nowrap" style={{ background: `${COLORS.gold}26`, color: COLORS.gold }}>
+                    Assigned
+                  </span>
+                )}
+              </button>
+              {expanded && <NominationDetail record={c} />}
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        onClick={() => onFinalize(assignments)}
+        disabled={!canFinalize || busy}
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+        style={{ background: COLORS.gold, color: "#1A1406", opacity: !canFinalize || busy ? 0.6 : 1 }}
+      >
+        {busy && <Loader2 size={14} className="animate-spin" />}
+        Finalize Champion of the Month
+      </button>
+    </div>
+  );
+}
+
 function CandidatePanel({ def, month, candidates, decided, winner, onSelect, busyId }) {
   const Icon = def.icon;
   const [expandedId, setExpandedId] = useState(null);
@@ -1146,6 +1315,7 @@ function CandidatePanel({ def, month, candidates, decided, winner, onSelect, bus
 
 function GmSelectionView({ profile, nominations, refresh }) {
   const [busyId, setBusyId] = useState(null);
+  const [championBusy, setChampionBusy] = useState(false);
   const [monthFilter, setMonthFilter] = useState(currentMonthValue());
   const [showHeroForm, setShowHeroForm] = useState(false);
 
@@ -1169,14 +1339,33 @@ function GmSelectionView({ profile, nominations, refresh }) {
     }
   }
 
+  async function handleFinalizeChampion(assignments) {
+    setChampionBusy(true);
+    try {
+      const list = CHAMPION_SLOTS.filter((slot) => assignments[slot.key]).map((slot) => ({
+        id: assignments[slot.key],
+        division: slot.division,
+        rank: slot.rank,
+      }));
+      await finalizeChampionSelections(monthFilter, list, profile.full_name);
+      await refresh();
+    } finally {
+      setChampionBusy(false);
+    }
+  }
+
   const heroThisMonth = nominations.find((n) => n.awardType === "hero" && n.month === monthFilter);
 
-  const panelData = ["champion", "shiningStar"].map((key) => ({
-    def: AWARD_TYPES[key],
-    candidates: nominations.filter((n) => n.awardType === key && n.month === monthFilter && n.status === "with_gm"),
-    decided: nominations.filter((n) => n.awardType === key && n.month === monthFilter && n.status === "not_selected"),
-    winner: nominations.find((n) => n.awardType === key && n.month === monthFilter && n.status === "winner"),
-  }));
+  const championCandidates = nominations.filter((n) => n.awardType === "champion" && n.month === monthFilter && n.status === "with_gm");
+  const championFinalized = nominations.filter((n) => n.awardType === "champion" && n.month === monthFilter && (n.status === "winner" || n.status === "runner_up"));
+  const championNotSelected = nominations.filter((n) => n.awardType === "champion" && n.month === monthFilter && n.status === "not_selected");
+
+  const shiningStar = {
+    def: AWARD_TYPES.shiningStar,
+    candidates: nominations.filter((n) => n.awardType === "shiningStar" && n.month === monthFilter && n.status === "with_gm"),
+    decided: nominations.filter((n) => n.awardType === "shiningStar" && n.month === monthFilter && n.status === "not_selected"),
+    winner: nominations.find((n) => n.awardType === "shiningStar" && n.month === monthFilter && n.status === "winner"),
+  };
 
   return (
     <div>
@@ -1193,9 +1382,32 @@ function GmSelectionView({ profile, nominations, refresh }) {
       </div>
 
       <div className="grid md:grid-cols-2 gap-5 mb-6">
-        {panelData.map((p) => (
-          <CandidatePanel key={p.def.key} def={p.def} month={monthFilter} candidates={p.candidates} decided={p.decided} winner={p.winner} onSelect={handleSelect} busyId={busyId} />
-        ))}
+        <div className="rounded-2xl p-5" style={{ background: COLORS.panel, border: `1px solid ${COLORS.hairline}` }}>
+          <div className="flex items-center gap-2 mb-4">
+            <TierBadge type="champion" />
+            <h3 className="font-semibold" style={{ color: COLORS.text, fontFamily: "Fraunces, serif" }}>
+              {AWARD_TYPES.champion.name}
+            </h3>
+          </div>
+          <ChampionSelectionPanel
+            month={monthFilter}
+            candidates={championCandidates}
+            decided={championNotSelected}
+            finalized={championFinalized}
+            onFinalize={handleFinalizeChampion}
+            busy={championBusy}
+          />
+        </div>
+
+        <CandidatePanel
+          def={shiningStar.def}
+          month={monthFilter}
+          candidates={shiningStar.candidates}
+          decided={shiningStar.decided}
+          winner={shiningStar.winner}
+          onSelect={handleSelect}
+          busyId={busyId}
+        />
       </div>
 
       <div className="rounded-2xl p-5" style={{ background: COLORS.panel, border: `1px solid ${COLORS.hairline}` }}>
@@ -1308,6 +1520,7 @@ function DashboardView({ nominations }) {
           <option value="submitted">Awaiting P&C</option>
           <option value="with_gm">With General Manager</option>
           <option value="winner">Winner</option>
+          <option value="runner_up">Runner-up</option>
           <option value="not_selected">Not Selected</option>
         </select>
       </div>
@@ -1355,7 +1568,7 @@ function MainApp({ profile, onSignOut }) {
   const pncBadge = profile.roles.includes("pnc") ? nominations.filter((n) => n.status === "submitted").length : 0;
   const gmBadge = profile.roles.includes("gm") ? nominations.filter((n) => n.status === "with_gm").length : 0;
 
-    const canSeeDashboard = profile.roles.includes("pnc") || profile.roles.includes("gm");
+  const canSeeDashboard = profile.roles.includes("pnc") || profile.roles.includes("gm");
 
   const tabs = [
     { key: "new", label: "New Nomination", icon: PlusCircle },
@@ -1363,7 +1576,7 @@ function MainApp({ profile, onSignOut }) {
     { key: "gm", label: "GM Selection", icon: Crown, badge: gmBadge },
     ...(canSeeDashboard ? [{ key: "dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
   ];
-  
+
   return (
     <div style={{ background: COLORS.bg, minHeight: "100vh" }}>
       <div className="max-w-5xl mx-auto rounded-2xl overflow-hidden" style={{ background: COLORS.bg }}>
@@ -1425,7 +1638,7 @@ function MainApp({ profile, onSignOut }) {
             <PncQueueView profile={profile} nominations={nominations} refresh={loadData} />
           ) : tab === "gm" ? (
             <GmSelectionView profile={profile} nominations={nominations} refresh={loadData} />
-                    ) : canSeeDashboard ? (
+          ) : canSeeDashboard ? (
             <DashboardView nominations={nominations} />
           ) : (
             <EmptyState icon={LayoutDashboard} title="Not available" body="This view isn't part of your role." />

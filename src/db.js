@@ -28,6 +28,7 @@ function rowToRecord(row) {
     forwardedBy: row.forwarded_by,
     decidedAt: row.decided_at,
     decidedBy: row.decided_by,
+    division: row.division,
   };
 }
 
@@ -107,4 +108,33 @@ export async function selectWinner(record, decidedBy) {
     .eq("status", "with_gm")
     .neq("id", record.id);
   if (restErr) throw restErr;
+}
+
+// Champion of the Month: General Manager assigns up to 4 people
+// (Front/Back of the House x Winner/Runner-up) from the forwarded pool.
+export async function finalizeChampionSelections(month, assignments, decidedBy) {
+  const now = new Date().toISOString();
+
+  for (const a of assignments) {
+    const { error } = await supabase
+      .from("nominations")
+      .update({ status: a.rank, division: a.division, decided_at: now, decided_by: decidedBy })
+      .eq("id", a.id);
+    if (error) throw error;
+  }
+
+  const assignedIds = assignments.map((a) => a.id);
+  let query = supabase
+    .from("nominations")
+    .update({ status: "not_selected", decided_at: now, decided_by: decidedBy })
+    .eq("award_type", "champion")
+    .eq("month", month)
+    .eq("status", "with_gm");
+
+  if (assignedIds.length > 0) {
+    query = query.not("id", "in", `(${assignedIds.join(",")})`);
+  }
+
+  const { error } = await query;
+  if (error) throw error;
 }
