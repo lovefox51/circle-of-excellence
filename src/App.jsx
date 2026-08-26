@@ -1051,6 +1051,7 @@ function PncQueueView({ profile, nominations, refresh }) {
 
 function CandidatePanel({ def, month, candidates, decided, winner, onSelect, busyId }) {
   const Icon = def.icon;
+  const [expandedId, setExpandedId] = useState(null);
   return (
     <div className="rounded-2xl p-5" style={{ background: COLORS.panel, border: `1px solid ${COLORS.hairline}` }}>
       <div className="flex items-center gap-2 mb-4">
@@ -1061,16 +1062,20 @@ function CandidatePanel({ def, month, candidates, decided, winner, onSelect, bus
       </div>
 
       {winner ? (
-        <div className="p-4 rounded-xl mb-3" style={{ background: `${COLORS.good}16`, border: `1px solid ${COLORS.good}55` }}>
-          <div className="flex items-center gap-2 text-xs font-semibold mb-1" style={{ color: COLORS.good }}>
-            <CheckCircle2 size={14} /> Winner selected
-          </div>
-          <div className="font-semibold" style={{ color: COLORS.text }}>
-            {winner.nominee.name}
-          </div>
-          <div className="text-xs" style={{ color: COLORS.textMuted }}>
-            {winner.department} · decided by {winner.decidedBy} on {formatDate(winner.decidedAt)}
-          </div>
+        <div className="rounded-xl mb-3 overflow-hidden" style={{ background: `${COLORS.good}16`, border: `1px solid ${COLORS.good}55` }}>
+          <button className="w-full text-left p-4" onClick={() => setExpandedId(expandedId === winner.id ? null : winner.id)}>
+            <div className="flex items-center gap-2 text-xs font-semibold mb-1" style={{ color: COLORS.good }}>
+              <CheckCircle2 size={14} /> Winner selected
+              <ChevronDown size={13} style={{ marginLeft: "auto", transform: expandedId === winner.id ? "rotate(180deg)" : "none" }} />
+            </div>
+            <div className="font-semibold" style={{ color: COLORS.text }}>
+              {winner.nominee.name}
+            </div>
+            <div className="text-xs" style={{ color: COLORS.textMuted }}>
+              {winner.department} · decided by {winner.decidedBy} on {formatDate(winner.decidedAt)}
+            </div>
+          </button>
+          {expandedId === winner.id && <NominationDetail record={winner} />}
         </div>
       ) : candidates.length === 0 ? (
         <p className="text-sm py-6 text-center" style={{ color: COLORS.textFaint }}>
@@ -1078,33 +1083,39 @@ function CandidatePanel({ def, month, candidates, decided, winner, onSelect, bus
         </p>
       ) : (
         <div className="space-y-2.5">
-          {candidates.map((c) => (
-            <div key={c.id} className="p-3 rounded-xl" style={{ background: COLORS.panelAlt, border: `1px solid ${COLORS.hairline}` }}>
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <div className="font-semibold text-sm" style={{ color: COLORS.text }}>
-                    {c.nominee.name}
+          {candidates.map((c) => {
+            const expanded = expandedId === c.id;
+            return (
+              <div key={c.id} className="rounded-xl overflow-hidden" style={{ background: COLORS.panelAlt, border: `1px solid ${COLORS.hairline}` }}>
+                <button className="w-full text-left p-3" onClick={() => setExpandedId(expanded ? null : c.id)}>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <ChevronDown size={14} style={{ color: COLORS.textFaint, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                      <div>
+                        <div className="font-semibold text-sm" style={{ color: COLORS.text }}>
+                          {c.nominee.name}
+                        </div>
+                        <div className="text-xs" style={{ color: COLORS.textMuted }}>
+                          {c.department} · {c.nominee.position}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xs" style={{ color: COLORS.textMuted }}>
-                    {c.department} · {c.nominee.position}
-                  </div>
-                </div>
-                <button
-                  onClick={() => onSelect(c)}
-                  disabled={busyId === c.id}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
-                  style={{ background: def.color, color: "#0D1B2A", opacity: busyId === c.id ? 0.6 : 1 }}
-                >
-                  <Icon size={13} /> Select as winner
                 </button>
+                {expanded && <NominationDetail record={c} />}
+                <div className="px-3 pb-3">
+                  <button
+                    onClick={() => onSelect(c)}
+                    disabled={busyId === c.id}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
+                    style={{ background: def.color, color: "#0D1B2A", opacity: busyId === c.id ? 0.6 : 1 }}
+                  >
+                    <Icon size={13} /> Select as winner
+                  </button>
+                </div>
               </div>
-              {c.comments && (
-                <p className="text-xs mt-2 pt-2" style={{ color: COLORS.textMuted, borderTop: `1px solid ${COLORS.hairline}` }}>
-                  “{c.comments}”
-                </p>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -1114,12 +1125,18 @@ function CandidatePanel({ def, month, candidates, decided, winner, onSelect, bus
             {decided.length} not selected
           </summary>
           <div className="mt-2 space-y-1.5">
-            {decided.map((c) => (
-              <div key={c.id} className="text-xs px-3 py-2 rounded-lg flex justify-between" style={{ background: COLORS.panelAlt, color: COLORS.textMuted }}>
-                <span>{c.nominee.name}</span>
-                <span>{c.department}</span>
-              </div>
-            ))}
+            {decided.map((c) => {
+              const expanded = expandedId === c.id;
+              return (
+                <div key={c.id} className="rounded-lg overflow-hidden" style={{ background: COLORS.panelAlt }}>
+                  <button className="w-full text-left text-xs px-3 py-2 flex justify-between items-center" style={{ color: COLORS.textMuted }} onClick={() => setExpandedId(expanded ? null : c.id)}>
+                    <span>{c.nominee.name}</span>
+                    <span>{c.department}</span>
+                  </button>
+                  {expanded && <NominationDetail record={c} />}
+                </div>
+              );
+            })}
           </div>
         </details>
       )}
