@@ -1030,6 +1030,7 @@ function NominationRow({ record, expanded, onToggle, actions, profile, onPhotoUp
           </div>
           <div className="text-xs" style={{ color: COLORS.textMuted }}>
             {AWARD_TYPES[record.awardType].name} · {formatMonthLabel(record.month)}
+            {record.division ? ` · ${DIVISION_LABEL[record.division]}` : ""}
             {record.awardType === "hero" && record.totalScore != null ? ` · ${record.totalScore}/${HERO_MAX_SCORE}` : ""}
           </div>
         </div>
@@ -1907,6 +1908,7 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [yearAwardFilter, setYearAwardFilter] = useState("all");
+  const [divisionFilter, setDivisionFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
 
   const months = useMemo(() => Array.from(new Set(nominations.map((n) => n.month))).sort().reverse(), [nominations]);
@@ -1918,6 +1920,7 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
     .filter((n) => (typeFilter === "all" ? true : n.awardType === typeFilter))
     .filter((n) => (statusFilter === "all" ? true : n.status === statusFilter))
     .filter((n) => (yearAwardFilter === "all" ? true : n.yearAward === yearAwardFilter))
+    .filter((n) => (divisionFilter === "all" ? true : n.division === divisionFilter))
     .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
   const totals = {
@@ -1970,6 +1973,11 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
           <option value="winner">Winner</option>
           <option value="runner_up">Runner-up</option>
           <option value="not_selected">Not Selected</option>
+        </select>
+        <select value={divisionFilter} onChange={(e) => setDivisionFilter(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
+          <option value="all">Front &amp; Back of the House</option>
+          <option value="foh">Front of the House only</option>
+          <option value="boh">Back of the House only</option>
         </select>
         <select value={yearAwardFilter} onChange={(e) => setYearAwardFilter(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
           <option value="all">All (yearly award)</option>
