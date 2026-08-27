@@ -17,6 +17,7 @@ import {
   Loader2,
   LogOut,
   Users,
+  Trophy,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import {
@@ -27,6 +28,7 @@ import {
   forwardAllPending,
   selectWinner,
   finalizeChampionSelections,
+  finalizeYearAwards,
   uploadNominationPhoto,
 } from "./db";
 import Login from "./Login";
@@ -179,6 +181,13 @@ const CHAMPION_SLOTS = [
   { key: "foh_runner_up", division: "foh", rank: "runner_up", label: "Front of the House — Runner-up" },
   { key: "boh_winner", division: "boh", rank: "winner", label: "Back of the House — Winner" },
   { key: "boh_runner_up", division: "boh", rank: "runner_up", label: "Back of the House — Runner-up" },
+];
+
+const YEAR_CHAMPION_SLOTS = [
+  { key: "foh_winner", division: "foh", rank: "winner", label: "Champion of the Year — Front of the House (Winner)" },
+  { key: "foh_runner_up", division: "foh", rank: "runner_up", label: "Champion of the Year — Front of the House (Runner-up)" },
+  { key: "boh_winner", division: "boh", rank: "winner", label: "Champion of the Year — Back of the House (Winner)" },
+  { key: "boh_runner_up", division: "boh", rank: "runner_up", label: "Champion of the Year — Back of the House (Runner-up)" },
 ];
 
 /* ---------------------------------------------------------------------- */
@@ -1562,6 +1571,312 @@ function GmSelectionView({ profile, nominations, refresh }) {
 }
 
 /* ---------------------------------------------------------------------- */
+/*  Award of the Year — GM picks winners across a whole year                */
+/* ---------------------------------------------------------------------- */
+
+function AwardOfYearChampionPanel({ year, candidates, finalized, onFinalize, busy }) {
+  const [assignments, setAssignments] = useState({});
+  const [expandedId, setExpandedId] = useState(null);
+
+  if (finalized.length > 0) {
+    return (
+      <div>
+        <div className="grid sm:grid-cols-2 gap-3 mb-3">
+          {YEAR_CHAMPION_SLOTS.map((slot) => {
+            const person = finalized.find((f) => f.yearAward === slot.rank && f.division === slot.division);
+            const expanded = person && expandedId === person.id;
+            return (
+              <div key={slot.key} className="rounded-xl overflow-hidden" style={{ background: `${COLORS.good}16`, border: `1px solid ${COLORS.good}55` }}>
+                <button className="w-full text-left p-3" disabled={!person} onClick={() => person && setExpandedId(expanded ? null : person.id)}>
+                  <div className="text-[11px] font-semibold mb-1" style={{ color: COLORS.good }}>
+                    {slot.label}
+                  </div>
+                  {person ? (
+                    <>
+                      <div className="font-semibold text-sm" style={{ color: COLORS.text }}>
+                        {person.nominee.name}
+                      </div>
+                      <div className="text-xs" style={{ color: COLORS.textMuted }}>
+                        {person.department} · won {formatMonthLabel(person.month)}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-xs" style={{ color: COLORS.textFaint }}>
+                      Not assigned
+                    </div>
+                  )}
+                </button>
+                {expanded && <NominationDetail record={person} />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (candidates.length === 0) {
+    return (
+      <p className="text-sm py-6 text-center" style={{ color: COLORS.textFaint }}>
+        No Champion of the Month winners or runners-up recorded yet for {year}.
+      </p>
+    );
+  }
+
+  const usedIds = new Set(Object.values(assignments).filter(Boolean));
+  const canFinalize = Object.values(assignments).some(Boolean);
+
+  function optionsFor(slot) {
+    return candidates.filter((c) => c.division === slot.division && (!usedIds.has(c.id) || assignments[slot.key] === c.id));
+  }
+
+  return (
+    <div>
+      <p className="text-xs mb-3" style={{ color: COLORS.textFaint }}>
+        Pick from everyone who was a monthly Winner or Runner-up in {year} — Front of the House and Back of the House are judged separately.
+      </p>
+      <div className="grid sm:grid-cols-2 gap-3 mb-4">
+        {YEAR_CHAMPION_SLOTS.map((slot) => (
+          <div key={slot.key} className="rounded-xl p-3" style={{ background: COLORS.panelAlt, border: `1px solid ${COLORS.hairline}` }}>
+            <div className="text-[11px] font-semibold mb-2" style={{ color: COLORS.goldSoft }}>
+              {slot.label}
+            </div>
+            <select
+              value={assignments[slot.key] || ""}
+              onChange={(e) => setAssignments((a) => ({ ...a, [slot.key]: e.target.value || undefined }))}
+              style={inputStyle}
+            >
+              <option value="">— none —</option>
+              {optionsFor(slot).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nominee.name} — {c.department} ({formatMonthLabel(c.month)}, {c.status === "winner" ? "Winner" : "Runner-up"})
+                </option>
+              ))}
+            </select>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2.5 mb-4">
+        {candidates.map((c) => {
+          const expanded = expandedId === c.id;
+          return (
+            <div key={c.id} className="rounded-xl overflow-hidden" style={{ background: COLORS.panelAlt, border: `1px solid ${COLORS.hairline}` }}>
+              <button className="w-full text-left p-3 flex items-center justify-between gap-3" onClick={() => setExpandedId(expanded ? null : c.id)}>
+                <div className="flex items-center gap-2">
+                  <ChevronDown size={14} style={{ color: COLORS.textFaint, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                  <Avatar photoUrl={c.photoUrl} />
+                  <div>
+                    <div className="font-semibold text-sm" style={{ color: COLORS.text }}>
+                      {c.nominee.name}
+                    </div>
+                    <div className="text-xs" style={{ color: COLORS.textMuted }}>
+                      {c.department} · {formatMonthLabel(c.month)} · {c.status === "winner" ? "Winner" : "Runner-up"} · {c.division === "foh" ? "Front of the House" : "Back of the House"}
+                    </div>
+                  </div>
+                </div>
+                {usedIds.has(c.id) && (
+                  <span className="text-[10px] font-semibold px-2 py-1 rounded-full whitespace-nowrap" style={{ background: `${COLORS.gold}26`, color: COLORS.gold }}>
+                    Assigned
+                  </span>
+                )}
+              </button>
+              {expanded && <NominationDetail record={c} />}
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        onClick={() => onFinalize(assignments)}
+        disabled={!canFinalize || busy}
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
+        style={{ background: COLORS.gold, color: "#1A1406", opacity: !canFinalize || busy ? 0.6 : 1 }}
+      >
+        {busy && <Loader2 size={14} className="animate-spin" />}
+        Finalize Champion of the Year
+      </button>
+    </div>
+  );
+}
+
+function AwardOfYearCandidatePanel({ def, year, candidates, winner, onSelect, busyId }) {
+  const Icon = def.icon;
+  const [expandedId, setExpandedId] = useState(null);
+  return (
+    <div className="rounded-2xl p-5" style={{ background: COLORS.panel, border: `1px solid ${COLORS.hairline}` }}>
+      <div className="flex items-center gap-2 mb-4">
+        <TierBadge type={def.key} />
+        <h3 className="font-semibold" style={{ color: COLORS.text, fontFamily: "Fraunces, serif" }}>
+          {def.name.replace(" of the Month", " of the Year")}
+        </h3>
+      </div>
+
+      {winner ? (
+        <div className="rounded-xl overflow-hidden" style={{ background: `${COLORS.good}16`, border: `1px solid ${COLORS.good}55` }}>
+          <button className="w-full text-left p-4" onClick={() => setExpandedId(expandedId === winner.id ? null : winner.id)}>
+            <div className="flex items-center gap-2 text-xs font-semibold mb-1" style={{ color: COLORS.good }}>
+              <CheckCircle2 size={14} /> Winner of the Year selected
+              <ChevronDown size={13} style={{ marginLeft: "auto", transform: expandedId === winner.id ? "rotate(180deg)" : "none" }} />
+            </div>
+            <div className="font-semibold" style={{ color: COLORS.text }}>
+              {winner.nominee.name}
+            </div>
+            <div className="text-xs" style={{ color: COLORS.textMuted }}>
+              {winner.department} · won {formatMonthLabel(winner.month)}
+            </div>
+          </button>
+          {expandedId === winner.id && <NominationDetail record={winner} />}
+        </div>
+      ) : candidates.length === 0 ? (
+        <p className="text-sm py-6 text-center" style={{ color: COLORS.textFaint }}>
+          No {def.name.replace(" of the Month", "")} winners recorded yet for {year}.
+        </p>
+      ) : (
+        <div className="space-y-2.5">
+          {candidates.map((c) => {
+            const expanded = expandedId === c.id;
+            return (
+              <div key={c.id} className="rounded-xl overflow-hidden" style={{ background: COLORS.panelAlt, border: `1px solid ${COLORS.hairline}` }}>
+                <button className="w-full text-left p-3" onClick={() => setExpandedId(expanded ? null : c.id)}>
+                  <div className="flex items-center gap-2">
+                    <ChevronDown size={14} style={{ color: COLORS.textFaint, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                    <Avatar photoUrl={c.photoUrl} />
+                    <div>
+                      <div className="font-semibold text-sm" style={{ color: COLORS.text }}>
+                        {c.nominee.name}
+                      </div>
+                      <div className="text-xs" style={{ color: COLORS.textMuted }}>
+                        {c.department} · won {formatMonthLabel(c.month)}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+                {expanded && <NominationDetail record={c} />}
+                <div className="px-3 pb-3">
+                  <button
+                    onClick={() => onSelect(c)}
+                    disabled={busyId === c.id}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold"
+                    style={{ background: def.color, color: "#0D1B2A", opacity: busyId === c.id ? 0.6 : 1 }}
+                  >
+                    <Icon size={13} /> Select as Winner of the Year
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AwardOfYearView({ profile, nominations, refresh }) {
+  const [busyId, setBusyId] = useState(null);
+  const [championBusy, setChampionBusy] = useState(false);
+  const [yearFilter, setYearFilter] = useState(String(new Date().getFullYear()));
+
+  const years = useMemo(() => {
+    const set = new Set(nominations.filter((n) => n.month).map((n) => n.month.slice(0, 4)));
+    set.add(String(new Date().getFullYear()));
+    return Array.from(set).sort().reverse();
+  }, [nominations]);
+
+  if (!profile.roles.includes("gm")) {
+    return <EmptyState icon={Trophy} title="General Manager only" body="Your account isn't set up to select the Awards of the Year." />;
+  }
+
+  const inYear = (n) => n.month && n.month.startsWith(yearFilter);
+
+  async function handleSelectYear(record, awardType) {
+    setBusyId(record.id);
+    try {
+      await finalizeYearAwards(yearFilter, [{ id: record.id, awardType, rank: "winner" }], profile.full_name);
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleFinalizeChampionYear(assignments) {
+    setChampionBusy(true);
+    try {
+      const list = YEAR_CHAMPION_SLOTS.filter((slot) => assignments[slot.key]).map((slot) => ({
+        id: assignments[slot.key],
+        awardType: "champion",
+        division: slot.division,
+        rank: slot.rank,
+      }));
+      await finalizeYearAwards(yearFilter, list, profile.full_name);
+      await refresh();
+    } finally {
+      setChampionBusy(false);
+    }
+  }
+
+  const championPool = nominations.filter((n) => n.awardType === "champion" && inYear(n) && (n.status === "winner" || n.status === "runner_up"));
+  const championFinalized = championPool.filter((n) => n.yearAward === "winner" || n.yearAward === "runner_up");
+
+  const shiningStarPool = nominations.filter((n) => n.awardType === "shiningStar" && inYear(n) && n.status === "winner");
+  const shiningStarYearWinner = shiningStarPool.find((n) => n.yearAward === "winner");
+
+  const heroPool = nominations.filter((n) => n.awardType === "hero" && inYear(n) && n.status === "winner");
+  const heroYearWinner = heroPool.find((n) => n.yearAward === "winner");
+
+  return (
+    <div>
+      <div className="flex items-end gap-3 flex-wrap mb-6">
+        <Field label="Year">
+          <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <div className="rounded-2xl p-5 mb-5" style={{ background: COLORS.panel, border: `1px solid ${COLORS.hairline}` }}>
+        <div className="flex items-center gap-2 mb-4">
+          <TierBadge type="champion" />
+          <h3 className="font-semibold" style={{ color: COLORS.text, fontFamily: "Fraunces, serif" }}>
+            Champion of the Year
+          </h3>
+        </div>
+        <AwardOfYearChampionPanel
+          year={yearFilter}
+          candidates={championPool.filter((c) => !c.yearAward)}
+          finalized={championFinalized}
+          onFinalize={handleFinalizeChampionYear}
+          busy={championBusy}
+        />
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-5">
+        <AwardOfYearCandidatePanel
+          def={AWARD_TYPES.shiningStar}
+          year={yearFilter}
+          candidates={shiningStarPool.filter((c) => !c.yearAward)}
+          winner={shiningStarYearWinner}
+          onSelect={(c) => handleSelectYear(c, "shiningStar")}
+          busyId={busyId}
+        />
+        <AwardOfYearCandidatePanel
+          def={AWARD_TYPES.hero}
+          year={yearFilter}
+          candidates={heroPool.filter((c) => !c.yearAward)}
+          winner={heroYearWinner}
+          onSelect={(c) => handleSelectYear(c, "hero")}
+          busyId={busyId}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
 /*  Dashboard / archive                                                     */
 /* ---------------------------------------------------------------------- */
 
@@ -1707,6 +2022,7 @@ function MainApp({ profile, onSignOut }) {
     { key: "new", label: "New Nomination", icon: PlusCircle },
     { key: "pnc", label: "P&C Queue", icon: Send, badge: pncBadge },
     { key: "gm", label: "GM Selection", icon: Crown, badge: gmBadge },
+    ...(profile.roles.includes("gm") ? [{ key: "yearly", label: "Award of the Year", icon: Trophy }] : []),
     ...(canSeeDashboard ? [{ key: "dashboard", label: "Dashboard", icon: LayoutDashboard }] : []),
   ];
 
@@ -1771,6 +2087,8 @@ function MainApp({ profile, onSignOut }) {
             <PncQueueView profile={profile} nominations={nominations} refresh={loadData} onPhotoUpload={handlePhotoUpload} />
           ) : tab === "gm" ? (
             <GmSelectionView profile={profile} nominations={nominations} refresh={loadData} />
+          ) : tab === "yearly" ? (
+            <AwardOfYearView profile={profile} nominations={nominations} refresh={loadData} />
           ) : canSeeDashboard ? (
             <DashboardView nominations={nominations} profile={profile} onPhotoUpload={handlePhotoUpload} />
           ) : (

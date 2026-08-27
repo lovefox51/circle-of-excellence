@@ -30,6 +30,7 @@ function rowToRecord(row) {
     decidedBy: row.decided_by,
     division: row.division,
     photoUrl: row.photo_url,
+    yearAward: row.year_award,
   };
 }
 
@@ -153,4 +154,41 @@ export async function uploadNominationPhoto(id, file) {
   if (updateErr) throw updateErr;
 
   return data.publicUrl;
+}
+
+// Award of the Year: General Manager picks winners across a whole year from
+// the pool of that year's monthly winners (and, for Champion, runner-ups too).
+// `assignments` is [{ id, awardType, division, rank }], rank is "winner" | "runner_up".
+export async function finalizeYearAwards(year, assignments, decidedBy) {
+  const now = new Date().toISOString();
+
+  for (const a of assignments) {
+    const { error } = await supabase
+      .from("nominations")
+      .update({ year_award: a.rank, decided_at: now, decided_by: decidedBy })
+      .eq("id", a.id);
+    if (error) throw error;
+  }
+
+  // Clear any previous year-award holders in the same category that weren't
+  // re-selected this time (e.g. GM changes their mind on who was Hero of the Year).
+  const groups = {};
+  for (const a of assignments) {
+    const key = `${a.awardType}|${a.division || ""}`;
+    if (!groups[key]) groups[key] = { awardType: a.awardType, division: a.division, ids: [] };
+    groups[key].ids.push(a.id);
+  }
+
+  for (const key of Object.keys(groups)) {
+    const { awardType, division, ids } = groups[key];
+    let query = supabase
+      .from("nominations")
+      .update({ year_award: null })
+      .eq("award_type", awardType)
+      .like("month", `${year}-%`)
+      .not("id", "in", `(${ids.join(",")})`);
+    if (division) query = query.eq("division", division);
+    const { error } = await query;
+    if (error) throw error;
+  }
 }
