@@ -725,6 +725,9 @@ function GmHeroForm({ month, profile, onCancel, onSubmitted }) {
           <Field label="Finalized by">
             <input value={profile.full_name} disabled style={readOnlyStyle} />
           </Field>
+          <Field label="Award month">
+            <input type="month" value={f.month} onChange={(e) => f.setMonth(e.target.value)} style={inputStyle} />
+          </Field>
         </div>
 
         <div className="flex flex-col items-center justify-center p-4 rounded-2xl" style={{ background: COLORS.panel, border: `1px solid ${COLORS.hairline}`, minWidth: 168 }}>
