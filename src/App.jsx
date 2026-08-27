@@ -29,6 +29,7 @@ import {
   selectWinner,
   finalizeChampionSelections,
   finalizeYearAwards,
+  clearYearAward,
   uploadNominationPhoto,
 } from "./db";
 import Login from "./Login";
@@ -1583,7 +1584,7 @@ function GmSelectionView({ profile, nominations, refresh }) {
 /*  Award of the Year — GM picks winners across a whole year                */
 /* ---------------------------------------------------------------------- */
 
-function AwardOfYearChampionPanel({ year, candidates, finalized, onFinalize, busy }) {
+function AwardOfYearChampionPanel({ year, candidates, finalized, onFinalize, busy, onClear, clearingId }) {
   const [assignments, setAssignments] = useState({});
   const [expandedId, setExpandedId] = useState(null);
 
@@ -1616,6 +1617,18 @@ function AwardOfYearChampionPanel({ year, candidates, finalized, onFinalize, bus
                   )}
                 </button>
                 {expanded && <NominationDetail record={person} />}
+                {person && (
+                  <div className="px-3 pb-3">
+                    <button
+                      onClick={() => onClear(person.id)}
+                      disabled={clearingId === person.id}
+                      className="text-xs font-medium underline"
+                      style={{ color: COLORS.textFaint, opacity: clearingId === person.id ? 0.5 : 1 }}
+                    >
+                      {clearingId === person.id ? "Changing…" : "Change selection"}
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -1642,7 +1655,7 @@ function AwardOfYearChampionPanel({ year, candidates, finalized, onFinalize, bus
   return (
     <div>
       <p className="text-xs mb-3" style={{ color: COLORS.textFaint }}>
-        Pick from everyone who was a monthly Winner or Runner-up in {year} — Front of the House and Back of the House are judged separately.
+        Pick from everyone who was a monthly Champion Winner in {year} — Front of the House and Back of the House are judged separately.
       </p>
       <div className="grid sm:grid-cols-2 gap-3 mb-4">
         {YEAR_CHAMPION_SLOTS.map((slot) => (
@@ -1658,7 +1671,7 @@ function AwardOfYearChampionPanel({ year, candidates, finalized, onFinalize, bus
               <option value="">— none —</option>
               {optionsFor(slot).map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.nominee.name} — {c.department} ({formatMonthLabel(c.month)}, {c.status === "winner" ? "Winner" : "Runner-up"})
+                  {c.nominee.name} — {c.department} ({formatMonthLabel(c.month)})
                 </option>
               ))}
             </select>
@@ -1680,7 +1693,7 @@ function AwardOfYearChampionPanel({ year, candidates, finalized, onFinalize, bus
                       {c.nominee.name}
                     </div>
                     <div className="text-xs" style={{ color: COLORS.textMuted }}>
-                      {c.department} · {formatMonthLabel(c.month)} · {c.status === "winner" ? "Winner" : "Runner-up"} · {c.division === "foh" ? "Front of the House" : "Back of the House"}
+                      {c.department} · {formatMonthLabel(c.month)} · {c.division === "foh" ? "Front of the House" : "Back of the House"}
                     </div>
                   </div>
                 </div>
@@ -1709,7 +1722,7 @@ function AwardOfYearChampionPanel({ year, candidates, finalized, onFinalize, bus
   );
 }
 
-function AwardOfYearCandidatePanel({ def, year, candidates, winner, onSelect, busyId }) {
+function AwardOfYearCandidatePanel({ def, year, candidates, winner, onSelect, busyId, onClear, clearingId }) {
   const Icon = def.icon;
   const [expandedId, setExpandedId] = useState(null);
   return (
@@ -1736,6 +1749,16 @@ function AwardOfYearCandidatePanel({ def, year, candidates, winner, onSelect, bu
             </div>
           </button>
           {expandedId === winner.id && <NominationDetail record={winner} />}
+          <div className="px-4 pb-3">
+            <button
+              onClick={() => onClear(winner.id)}
+              disabled={clearingId === winner.id}
+              className="text-xs font-medium underline"
+              style={{ color: COLORS.textFaint, opacity: clearingId === winner.id ? 0.5 : 1 }}
+            >
+              {clearingId === winner.id ? "Changing…" : "Change selection"}
+            </button>
+          </div>
         </div>
       ) : candidates.length === 0 ? (
         <p className="text-sm py-6 text-center" style={{ color: COLORS.textFaint }}>
@@ -1784,6 +1807,7 @@ function AwardOfYearCandidatePanel({ def, year, candidates, winner, onSelect, bu
 function AwardOfYearView({ profile, nominations, refresh }) {
   const [busyId, setBusyId] = useState(null);
   const [championBusy, setChampionBusy] = useState(false);
+  const [clearingId, setClearingId] = useState(null);
   const [yearFilter, setYearFilter] = useState(String(new Date().getFullYear()));
 
   const years = useMemo(() => {
@@ -1808,6 +1832,16 @@ function AwardOfYearView({ profile, nominations, refresh }) {
     }
   }
 
+  async function handleClear(id) {
+    setClearingId(id);
+    try {
+      await clearYearAward(id);
+      await refresh();
+    } finally {
+      setClearingId(null);
+    }
+  }
+
   async function handleFinalizeChampionYear(assignments) {
     setChampionBusy(true);
     try {
@@ -1824,7 +1858,7 @@ function AwardOfYearView({ profile, nominations, refresh }) {
     }
   }
 
-  const championPool = nominations.filter((n) => n.awardType === "champion" && inYear(n) && (n.status === "winner" || n.status === "runner_up"));
+  const championPool = nominations.filter((n) => n.awardType === "champion" && inYear(n) && n.status === "winner");
   const championFinalized = championPool.filter((n) => n.yearAward === "winner" || n.yearAward === "runner_up");
 
   const shiningStarPool = nominations.filter((n) => n.awardType === "shiningStar" && inYear(n) && n.status === "winner");
@@ -1860,6 +1894,8 @@ function AwardOfYearView({ profile, nominations, refresh }) {
           finalized={championFinalized}
           onFinalize={handleFinalizeChampionYear}
           busy={championBusy}
+          onClear={handleClear}
+          clearingId={clearingId}
         />
       </div>
 
@@ -1871,6 +1907,8 @@ function AwardOfYearView({ profile, nominations, refresh }) {
           winner={shiningStarYearWinner}
           onSelect={(c) => handleSelectYear(c, "shiningStar")}
           busyId={busyId}
+          onClear={handleClear}
+          clearingId={clearingId}
         />
         <AwardOfYearCandidatePanel
           def={AWARD_TYPES.hero}
@@ -1879,6 +1917,8 @@ function AwardOfYearView({ profile, nominations, refresh }) {
           winner={heroYearWinner}
           onSelect={(c) => handleSelectYear(c, "hero")}
           busyId={busyId}
+          onClear={handleClear}
+          clearingId={clearingId}
         />
       </div>
     </div>
