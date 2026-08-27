@@ -878,7 +878,7 @@ function InfoBit({ label, value }) {
 function PhotoBlock({ record, profile, onUpload }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const canUpload = profile?.roles?.includes("pnc") && (record.status === "winner" || record.status === "runner_up");
+  const canUpload = profile?.roles?.includes("pnc");
 
   async function handleFile(e) {
     const file = e.target.files?.[0];
@@ -1012,6 +1012,7 @@ function NominationRow({ record, expanded, onToggle, actions, profile, onPhotoUp
     <div className="rounded-xl overflow-hidden" style={{ background: COLORS.panelAlt, border: `1px solid ${COLORS.hairline}` }}>
       <button className="w-full flex items-center gap-3 p-4 text-left" onClick={onToggle}>
         <TierBadge type={record.awardType} />
+        <Avatar photoUrl={record.photoUrl} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-sm" style={{ color: COLORS.text }}>
@@ -1043,7 +1044,7 @@ function NominationRow({ record, expanded, onToggle, actions, profile, onPhotoUp
 /*  P&C Queue — forward only, no review                                    */
 /* ---------------------------------------------------------------------- */
 
-function PncQueueView({ profile, nominations, refresh }) {
+function PncQueueView({ profile, nominations, refresh, onPhotoUpload }) {
   const [expandedId, setExpandedId] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [busyAll, setBusyAll] = useState(false);
@@ -1099,6 +1100,8 @@ function PncQueueView({ profile, nominations, refresh }) {
               record={record}
               expanded={expandedId === record.id}
               onToggle={() => setExpandedId(expandedId === record.id ? null : record.id)}
+              profile={profile}
+              onPhotoUpload={onPhotoUpload}
               actions={
                 <button
                   onClick={() => forwardOne(record)}
@@ -1120,6 +1123,16 @@ function PncQueueView({ profile, nominations, refresh }) {
 /* ---------------------------------------------------------------------- */
 /*  GM Selection — pick one winner per tier, per month                     */
 /* ---------------------------------------------------------------------- */
+
+function Avatar({ photoUrl, size = 32 }) {
+  return photoUrl ? (
+    <img src={photoUrl} alt="" className="rounded-full object-cover shrink-0" style={{ width: size, height: size, border: `1px solid ${COLORS.hairline}` }} />
+  ) : (
+    <div className="rounded-full flex items-center justify-center shrink-0" style={{ width: size, height: size, background: COLORS.panel, color: COLORS.textFaint }}>
+      <Users size={size * 0.5} />
+    </div>
+  );
+}
 
 function ChampionSelectionPanel({ month, candidates, decided, finalized, onFinalize, busy }) {
   const [assignments, setAssignments] = useState({});
@@ -1241,6 +1254,7 @@ function ChampionSelectionPanel({ month, candidates, decided, finalized, onFinal
               <button className="w-full text-left p-3 flex items-center justify-between gap-3" onClick={() => setExpandedId(expanded ? null : c.id)}>
                 <div className="flex items-center gap-2">
                   <ChevronDown size={14} style={{ color: COLORS.textFaint, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                  <Avatar photoUrl={c.photoUrl} />
                   <div>
                     <div className="font-semibold text-sm" style={{ color: COLORS.text }}>
                       {c.nominee.name}
@@ -1317,6 +1331,7 @@ function CandidatePanel({ def, month, candidates, decided, winner, onSelect, bus
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div className="flex items-center gap-2">
                       <ChevronDown size={14} style={{ color: COLORS.textFaint, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+                      <Avatar photoUrl={c.photoUrl} />
                       <div>
                         <div className="font-semibold text-sm" style={{ color: COLORS.text }}>
                           {c.nominee.name}
@@ -1715,7 +1730,7 @@ function MainApp({ profile, onSignOut }) {
           ) : tab === "new" ? (
             <NewNominationTab profile={profile} refresh={loadData} />
           ) : tab === "pnc" ? (
-            <PncQueueView profile={profile} nominations={nominations} refresh={loadData} />
+            <PncQueueView profile={profile} nominations={nominations} refresh={loadData} onPhotoUpload={handlePhotoUpload} />
           ) : tab === "gm" ? (
             <GmSelectionView profile={profile} nominations={nominations} refresh={loadData} />
           ) : canSeeDashboard ? (
