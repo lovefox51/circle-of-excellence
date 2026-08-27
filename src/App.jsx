@@ -1034,6 +1034,14 @@ function NominationRow({ record, expanded, onToggle, actions, profile, onPhotoUp
           </div>
         </div>
         <StatusPill status={record.status} />
+        {record.yearAward && (
+          <span
+            className="text-[10px] font-semibold px-2 py-1 rounded-full whitespace-nowrap flex items-center gap-1"
+            style={{ background: `${COLORS.gold}26`, color: COLORS.gold }}
+          >
+            <Trophy size={10} /> {record.yearAward === "winner" ? "Year Winner" : "Year Runner-up"}
+          </span>
+        )}
         <ChevronDown size={16} style={{ color: COLORS.textFaint, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
       </button>
       {expanded && (
@@ -1898,6 +1906,7 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
   const [monthFilter, setMonthFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [yearAwardFilter, setYearAwardFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
 
   const months = useMemo(() => Array.from(new Set(nominations.map((n) => n.month))).sort().reverse(), [nominations]);
@@ -1908,6 +1917,7 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
     .filter((n) => (monthFilter === "all" ? true : n.month === monthFilter))
     .filter((n) => (typeFilter === "all" ? true : n.awardType === typeFilter))
     .filter((n) => (statusFilter === "all" ? true : n.status === statusFilter))
+    .filter((n) => (yearAwardFilter === "all" ? true : n.yearAward === yearAwardFilter))
     .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
   const totals = {
@@ -1915,6 +1925,7 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
     submitted: nominations.filter((n) => n.status === "submitted").length,
     with_gm: nominations.filter((n) => n.status === "with_gm").length,
     winner: nominations.filter((n) => n.status === "winner").length,
+    yearAward: nominations.filter((n) => n.yearAward).length,
   };
 
   return (
@@ -1924,6 +1935,7 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
         <StatCard label="Awaiting P&C" value={totals.submitted} color={COLORS.gold} />
         <StatCard label="With General Manager" value={totals.with_gm} color={COLORS.champion} />
         <StatCard label="Winners" value={totals.winner} color={COLORS.good} />
+        <StatCard label="Awards of the Year" value={totals.yearAward} color={COLORS.gold} />
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -1958,6 +1970,11 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
           <option value="winner">Winner</option>
           <option value="runner_up">Runner-up</option>
           <option value="not_selected">Not Selected</option>
+        </select>
+        <select value={yearAwardFilter} onChange={(e) => setYearAwardFilter(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
+          <option value="all">All (yearly award)</option>
+          <option value="winner">Award of the Year — Winner</option>
+          <option value="runner_up">Award of the Year — Runner-up</option>
         </select>
       </div>
 
