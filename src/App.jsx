@@ -16,9 +16,19 @@ import {
   AlertTriangle,
   Loader2,
   LogOut,
+  Users,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
-import { fetchNominations, fetchMyProfile, insertNomination, forwardNomination, forwardAllPending, selectWinner, finalizeChampionSelections } from "./db";
+import {
+  fetchNominations,
+  fetchMyProfile,
+  insertNomination,
+  forwardNomination,
+  forwardAllPending,
+  selectWinner,
+  finalizeChampionSelections,
+  uploadNominationPhoto,
+} from "./db";
 import Login from "./Login";
 
 /* ---------------------------------------------------------------------- */
@@ -865,10 +875,57 @@ function InfoBit({ label, value }) {
   );
 }
 
-function NominationDetail({ record }) {
+function PhotoBlock({ record, profile, onUpload }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const canUpload = profile?.roles?.includes("pnc") && (record.status === "winner" || record.status === "runner_up");
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError("");
+    setUploading(true);
+    try {
+      await onUpload(record.id, file);
+    } catch (err) {
+      setError(err.message || "Couldn't upload photo.");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
+
+  if (!record.photoUrl && !canUpload) return null;
+
+  return (
+    <div className="flex items-center gap-3">
+      {record.photoUrl ? (
+        <img src={record.photoUrl} alt={record.nominee.name} className="w-14 h-14 rounded-full object-cover" style={{ border: `1px solid ${COLORS.hairline}` }} />
+      ) : (
+        <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: COLORS.panel, color: COLORS.textFaint }}>
+          <Users size={20} />
+        </div>
+      )}
+      {canUpload && (
+        <label className="text-xs font-medium px-3 py-1.5 rounded-lg cursor-pointer" style={{ background: COLORS.panelAlt, color: COLORS.text, border: `1px solid ${COLORS.hairline}` }}>
+          {uploading ? "Uploading..." : record.photoUrl ? "Replace photo" : "Upload photo"}
+          <input type="file" accept="image/*" onChange={handleFile} disabled={uploading} className="hidden" />
+        </label>
+      )}
+      {error && (
+        <span className="text-xs" style={{ color: COLORS.bad }}>
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function NominationDetail({ record, profile, onPhotoUpload }) {
   const def = AWARD_TYPES[record.awardType];
   return (
     <div className="px-5 pb-5 pt-1 space-y-4">
+      <PhotoBlock record={record} profile={profile} onUpload={onPhotoUpload} />
       {!record.isEligible && (
         <div className="flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg" style={{ background: `${COLORS.gold}1f`, color: COLORS.gold }}>
           <AlertTriangle size={14} /> Did not meet the {def.minMonths}-month tenure rule at submission ({record.monthsServed} months served).
@@ -950,7 +1007,7 @@ function NominationDetail({ record }) {
   );
 }
 
-function NominationRow({ record, expanded, onToggle, actions }) {
+function NominationRow({ record, expanded, onToggle, actions, profile, onPhotoUpload }) {
   return (
     <div className="rounded-xl overflow-hidden" style={{ background: COLORS.panelAlt, border: `1px solid ${COLORS.hairline}` }}>
       <button className="w-full flex items-center gap-3 p-4 text-left" onClick={onToggle}>
@@ -974,7 +1031,7 @@ function NominationRow({ record, expanded, onToggle, actions }) {
       </button>
       {expanded && (
         <>
-          <NominationDetail record={record} />
+          <NominationDetail record={record} profile={profile} onPhotoUpload={onPhotoUpload} />
           {actions && <div className="px-5 pb-5 flex gap-2 flex-wrap">{actions}</div>}
         </>
       )}
@@ -1468,7 +1525,7 @@ function StatCard({ label, value, color }) {
   );
 }
 
-function DashboardView({ nominations }) {
+function DashboardView({ nominations, profile, onPhotoUpload }) {
   const [yearFilter, setYearFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -1541,7 +1598,14 @@ function DashboardView({ nominations }) {
       ) : (
         <div className="space-y-3">
           {filtered.map((record) => (
-            <NominationRow key={record.id} record={record} expanded={expandedId === record.id} onToggle={() => setExpandedId(expandedId === record.id ? null : record.id)} />
+            <NominationRow
+              key={record.id}
+              record={record}
+              expanded={expandedId === record.id}
+              onToggle={() => setExpandedId(expandedId === record.id ? null : record.id)}
+              profile={profile}
+              onPhotoUpload={onPhotoUpload}
+            />
           ))}
         </div>
       )}
@@ -1575,6 +1639,11 @@ function MainApp({ profile, onSignOut }) {
   useEffect(() => {
     loadData();
   }, []);
+
+  async function handlePhotoUpload(id, file) {
+    await uploadNominationPhoto(id, file);
+    await loadData();
+  }
 
   const pncBadge = profile.roles.includes("pnc") ? nominations.filter((n) => n.status === "submitted").length : 0;
   const gmBadge = profile.roles.includes("gm") ? nominations.filter((n) => n.status === "with_gm").length : 0;
@@ -1650,7 +1719,7 @@ function MainApp({ profile, onSignOut }) {
           ) : tab === "gm" ? (
             <GmSelectionView profile={profile} nominations={nominations} refresh={loadData} />
           ) : canSeeDashboard ? (
-            <DashboardView nominations={nominations} />
+            <DashboardView nominations={nominations} profile={profile} onPhotoUpload={handlePhotoUpload} />
           ) : (
             <EmptyState icon={LayoutDashboard} title="Not available" body="This view isn't part of your role." />
           )}

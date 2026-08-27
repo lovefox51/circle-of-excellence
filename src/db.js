@@ -29,6 +29,7 @@ function rowToRecord(row) {
     decidedAt: row.decided_at,
     decidedBy: row.decided_by,
     division: row.division,
+    photoUrl: row.photo_url,
   };
 }
 
@@ -137,4 +138,19 @@ export async function finalizeChampionSelections(month, assignments, decidedBy) 
 
   const { error } = await query;
   if (error) throw error;
+}
+
+export async function uploadNominationPhoto(id, file) {
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const path = `${id}-${Date.now()}.${ext}`;
+
+  const { error: uploadErr } = await supabase.storage.from("winner-photos").upload(path, file, { upsert: true });
+  if (uploadErr) throw uploadErr;
+
+  const { data } = supabase.storage.from("winner-photos").getPublicUrl(path);
+
+  const { error: updateErr } = await supabase.from("nominations").update({ photo_url: data.publicUrl }).eq("id", id);
+  if (updateErr) throw updateErr;
+
+  return data.publicUrl;
 }
