@@ -192,3 +192,9 @@ export async function finalizeYearAwards(year, assignments, decidedBy) {
     if (error) throw error;
   }
 }
+
+// Undo a single Award of the Year selection, so the General Manager can pick again.
+export async function clearYearAward(id) {
+  const { error } = await supabase.from("nominations").update({ year_award: null }).eq("id", id);
+  if (error) throw error;
+}
