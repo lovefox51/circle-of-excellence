@@ -899,13 +899,7 @@ function PhotoBlock({ record, profile, onUpload }) {
 
   return (
     <div className="flex items-center gap-3">
-      {record.photoUrl ? (
-        <img src={record.photoUrl} alt={record.nominee.name} className="w-14 h-14 rounded-full object-cover" style={{ border: `1px solid ${COLORS.hairline}` }} />
-      ) : (
-        <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: COLORS.panel, color: COLORS.textFaint }}>
-          <Users size={20} />
-        </div>
-      )}
+      <Avatar photoUrl={record.photoUrl} size={56} />
       {canUpload && (
         <label className="text-xs font-medium px-3 py-1.5 rounded-lg cursor-pointer" style={{ background: COLORS.panelAlt, color: COLORS.text, border: `1px solid ${COLORS.hairline}` }}>
           {uploading ? "Uploading..." : record.photoUrl ? "Replace photo" : "Upload photo"}
@@ -1124,13 +1118,54 @@ function PncQueueView({ profile, nominations, refresh, onPhotoUpload }) {
 /*  GM Selection — pick one winner per tier, per month                     */
 /* ---------------------------------------------------------------------- */
 
-function Avatar({ photoUrl, size = 32 }) {
-  return photoUrl ? (
-    <img src={photoUrl} alt="" className="rounded-full object-cover shrink-0" style={{ width: size, height: size, border: `1px solid ${COLORS.hairline}` }} />
-  ) : (
-    <div className="rounded-full flex items-center justify-center shrink-0" style={{ width: size, height: size, background: COLORS.panel, color: COLORS.textFaint }}>
-      <Users size={size * 0.5} />
+function PhotoLightbox({ photoUrl, onClose }) {
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center p-6"
+      style={{ background: "rgba(0,0,0,0.8)", zIndex: 1000 }}
+      onClick={onClose}
+    >
+      <img
+        src={photoUrl}
+        alt=""
+        className="rounded-2xl"
+        style={{ maxWidth: "min(90vw, 480px)", maxHeight: "85vh", objectFit: "contain", border: `1px solid ${COLORS.hairline}` }}
+        onClick={(e) => e.stopPropagation()}
+      />
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center"
+        style={{ background: COLORS.panel, color: COLORS.text }}
+      >
+        <XCircle size={20} />
+      </button>
     </div>
+  );
+}
+
+function Avatar({ photoUrl, size = 32 }) {
+  const [open, setOpen] = useState(false);
+  if (!photoUrl) {
+    return (
+      <div className="rounded-full flex items-center justify-center shrink-0" style={{ width: size, height: size, background: COLORS.panel, color: COLORS.textFaint }}>
+        <Users size={size * 0.5} />
+      </div>
+    );
+  }
+  return (
+    <>
+      <img
+        src={photoUrl}
+        alt=""
+        className="rounded-full object-cover shrink-0 cursor-pointer"
+        style={{ width: size, height: size, border: `1px solid ${COLORS.hairline}` }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+      />
+      {open && <PhotoLightbox photoUrl={photoUrl} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 
