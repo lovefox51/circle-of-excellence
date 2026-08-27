@@ -1469,14 +1469,17 @@ function StatCard({ label, value, color }) {
 }
 
 function DashboardView({ nominations }) {
+  const [yearFilter, setYearFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
 
   const months = useMemo(() => Array.from(new Set(nominations.map((n) => n.month))).sort().reverse(), [nominations]);
+  const years = useMemo(() => Array.from(new Set(nominations.map((n) => n.month.split("-")[0]))).sort().reverse(), [nominations]);
 
   const filtered = nominations
+    .filter((n) => (yearFilter === "all" ? true : n.month.split("-")[0] === yearFilter))
     .filter((n) => (monthFilter === "all" ? true : n.month === monthFilter))
     .filter((n) => (typeFilter === "all" ? true : n.awardType === typeFilter))
     .filter((n) => (statusFilter === "all" ? true : n.status === statusFilter))
@@ -1499,6 +1502,14 @@ function DashboardView({ nominations }) {
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
+        <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
+          <option value="all">All years</option>
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
         <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
           <option value="all">All months</option>
           {months.map((m) => (
