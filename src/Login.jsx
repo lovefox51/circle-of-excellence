@@ -47,14 +47,15 @@ export default function Login() {
         style={{ background: COLORS.panel, border: `1px solid ${COLORS.hairline}` }}
       >
         <div className="flex flex-col items-center mb-6">
+          <div className="bg-white rounded-2xl px-6 py-4 mb-4">
+            <img src="/radisson-blu-doha-logo.png" alt="Radisson Blu Hotel Doha" style={{ height: 42, display: "block" }} />
+          </div>
           <span
             className="w-11 h-11 rounded-full flex items-center justify-center mb-3"
             style={{ background: `linear-gradient(135deg, ${COLORS.gold}, ${COLORS.hero})` }}
           >
             <Sparkles size={18} color="#1A1406" />
-          </span>          <p className="text-xs uppercase tracking-[0.2em] mb-1" style={{ color: COLORS.gold }}>
-            Radisson Blu Hotel Doha
-          </p>
+          </span>
           <h1 className="text-lg font-semibold" style={{ color: COLORS.text, fontFamily: "Fraunces, serif" }}>
             Circle of Excellence
           </h1>
