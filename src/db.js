@@ -198,3 +198,24 @@ export async function clearYearAward(id) {
   const { error } = await supabase.from("nominations").update({ year_award: null }).eq("id", id);
   if (error) throw error;
 }
+
+// Undo a monthly Champion/Shining Star decision: reopens every nomination for
+// that award type + month back into the General Manager's selection pool.
+export async function reopenMonth(awardType, month, decidedBy) {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("nominations")
+    .update({ status: "with_gm", decided_at: null, decided_by: null })
+    .eq("award_type", awardType)
+    .eq("month", month)
+    .in("status", ["winner", "runner_up", "not_selected"]);
+  if (error) throw error;
+}
+
+// Undo a Hero of the Month entry. Hero has no pool to reopen (it's finalized
+// the moment the General Manager submits it), so undoing means deleting the
+// record so a fresh one can be nominated for that month.
+export async function deleteNomination(id) {
+  const { error } = await supabase.from("nominations").delete().eq("id", id);
+  if (error) throw error;
+}

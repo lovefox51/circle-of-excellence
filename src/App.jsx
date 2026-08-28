@@ -30,6 +30,8 @@ import {
   finalizeChampionSelections,
   finalizeYearAwards,
   clearYearAward,
+  reopenMonth,
+  deleteNomination,
   uploadNominationPhoto,
 } from "./db";
 import Login from "./Login";
@@ -1191,7 +1193,7 @@ function Avatar({ photoUrl, size = 32 }) {
   );
 }
 
-function ChampionSelectionPanel({ month, candidates, decided, finalized, onFinalize, busy }) {
+function ChampionSelectionPanel({ month, candidates, decided, finalized, onFinalize, busy, onReopen, reopening }) {
   const [assignments, setAssignments] = useState({});
   const [expandedId, setExpandedId] = useState(null);
 
@@ -1257,6 +1259,14 @@ function ChampionSelectionPanel({ month, candidates, decided, finalized, onFinal
             </div>
           </details>
         )}
+        <button
+          onClick={onReopen}
+          disabled={reopening}
+          className="text-xs font-medium underline mt-3"
+          style={{ color: COLORS.textFaint, opacity: reopening ? 0.5 : 1 }}
+        >
+          {reopening ? "Reopening…" : "Reopen this month's decision"}
+        </button>
       </div>
     );
   }
@@ -1346,7 +1356,7 @@ function ChampionSelectionPanel({ month, candidates, decided, finalized, onFinal
   );
 }
 
-function CandidatePanel({ def, month, candidates, decided, winner, onSelect, busyId }) {
+function CandidatePanel({ def, month, candidates, decided, winner, onSelect, busyId, onReopen, reopening }) {
   const Icon = def.icon;
   const [expandedId, setExpandedId] = useState(null);
   return (
@@ -1373,6 +1383,16 @@ function CandidatePanel({ def, month, candidates, decided, winner, onSelect, bus
             </div>
           </button>
           {expandedId === winner.id && <NominationDetail record={winner} />}
+          <div className="px-4 pb-3">
+            <button
+              onClick={onReopen}
+              disabled={reopening}
+              className="text-xs font-medium underline"
+              style={{ color: COLORS.textFaint, opacity: reopening ? 0.5 : 1 }}
+            >
+              {reopening ? "Reopening…" : "Reopen this month's decision"}
+            </button>
+          </div>
         </div>
       ) : candidates.length === 0 ? (
         <p className="text-sm py-6 text-center" style={{ color: COLORS.textFaint }}>
@@ -1445,6 +1465,9 @@ function CandidatePanel({ def, month, candidates, decided, winner, onSelect, bus
 function GmSelectionView({ profile, nominations, refresh }) {
   const [busyId, setBusyId] = useState(null);
   const [championBusy, setChampionBusy] = useState(false);
+  const [reopeningChampion, setReopeningChampion] = useState(false);
+  const [reopeningShiningStar, setReopeningShiningStar] = useState(false);
+  const [heroDeleting, setHeroDeleting] = useState(false);
   const [monthFilter, setMonthFilter] = useState(currentMonthValue());
   const [showHeroForm, setShowHeroForm] = useState(false);
 
@@ -1480,6 +1503,36 @@ function GmSelectionView({ profile, nominations, refresh }) {
       await refresh();
     } finally {
       setChampionBusy(false);
+    }
+  }
+
+  async function handleReopenChampion() {
+    setReopeningChampion(true);
+    try {
+      await reopenMonth("champion", monthFilter, profile.full_name);
+      await refresh();
+    } finally {
+      setReopeningChampion(false);
+    }
+  }
+
+  async function handleReopenShiningStar() {
+    setReopeningShiningStar(true);
+    try {
+      await reopenMonth("shiningStar", monthFilter, profile.full_name);
+      await refresh();
+    } finally {
+      setReopeningShiningStar(false);
+    }
+  }
+
+  async function handleDeleteHero(id) {
+    setHeroDeleting(true);
+    try {
+      await deleteNomination(id);
+      await refresh();
+    } finally {
+      setHeroDeleting(false);
     }
   }
 
@@ -1525,6 +1578,8 @@ function GmSelectionView({ profile, nominations, refresh }) {
             finalized={championFinalized}
             onFinalize={handleFinalizeChampion}
             busy={championBusy}
+            onReopen={handleReopenChampion}
+            reopening={reopeningChampion}
           />
         </div>
 
@@ -1536,6 +1591,8 @@ function GmSelectionView({ profile, nominations, refresh }) {
           winner={shiningStar.winner}
           onSelect={handleSelect}
           busyId={busyId}
+          onReopen={handleReopenShiningStar}
+          reopening={reopeningShiningStar}
         />
       </div>
 
@@ -1561,9 +1618,17 @@ function GmSelectionView({ profile, nominations, refresh }) {
             <div className="font-semibold" style={{ color: COLORS.text }}>
               {heroThisMonth.nominee.name}
             </div>
-            <div className="text-xs" style={{ color: COLORS.textMuted }}>
+            <div className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
               {heroThisMonth.nominee.level} · {heroThisMonth.department} · {heroThisMonth.totalScore}/{HERO_MAX_SCORE} · finalized by {heroThisMonth.decidedBy}
             </div>
+            <button
+              onClick={() => handleDeleteHero(heroThisMonth.id)}
+              disabled={heroDeleting}
+              className="text-xs font-medium underline"
+              style={{ color: COLORS.textFaint, opacity: heroDeleting ? 0.5 : 1 }}
+            >
+              {heroDeleting ? "Removing…" : "Remove & re-nominate"}
+            </button>
           </div>
         ) : (
           <div className="flex items-center justify-between flex-wrap gap-3">
