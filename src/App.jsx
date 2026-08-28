@@ -18,7 +18,6 @@ import {
   LogOut,
   Users,
   Trophy,
-  X,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import {
@@ -31,6 +30,8 @@ import {
   finalizeChampionSelections,
   finalizeYearAwards,
   clearYearAward,
+  reopenMonth,
+  deleteNomination,
   uploadNominationPhoto,
 } from "./db";
 import Login from "./Login";
@@ -225,6 +226,20 @@ function formatDate(iso) {
 
 function heroTotalScore(scores) {
   return Object.values(scores || {}).reduce((sum, v) => sum + (Number(v) || 0), 0);
+}
+
+// Has this person (by Clock No.) already won any award this calendar year?
+// Used to warn the General Manager before picking a repeat winner.
+function findPriorWinInYear(nominations, clockNo, year, excludeId) {
+  if (!clockNo) return null;
+  return nominations.find(
+    (n) =>
+      n.nominee.clockNo === clockNo &&
+      n.status === "winner" &&
+      n.id !== excludeId &&
+      n.month &&
+      n.month.startsWith(year)
+  );
 }
 
 /* ---------------------------------------------------------------------- */
@@ -646,7 +661,7 @@ function AwardPicker({ types, onPick }) {
 /*  General Manager — Hero of the Month (direct, self-finalizing)          */
 /* ---------------------------------------------------------------------- */
 
-function GmHeroForm({ month, profile, onCancel, onSubmitted }) {
+function GmHeroForm({ month, profile, onCancel, onSubmitted, allNominations }) {
   const def = AWARD_TYPES.hero;
   const f = useNominationFormState(def, { month, submittedBy: profile.full_name });
   const [saving, setSaving] = useState(false);
@@ -658,6 +673,14 @@ function GmHeroForm({ month, profile, onCancel, onSubmitted }) {
     if (!canSubmit) {
       setError("Please complete every required field, the eligibility confirmation, and every leadership foundation before finalizing.");
       return;
+    }
+    const year = f.month.slice(0, 4);
+    const prior = findPriorWinInYear(allNominations, f.clockNo.trim(), year, null);
+    if (prior) {
+      const ok = window.confirm(
+        `${f.name} already won ${AWARD_TYPES[prior.awardType].name} in ${formatMonthLabel(prior.month)} this year.\n\nSelect them again anyway?`
+      );
+      if (!ok) return;
     }
     setError("");
     setSaving(true);
@@ -1192,7 +1215,7 @@ function Avatar({ photoUrl, size = 32 }) {
   );
 }
 
-function ChampionSelectionPanel({ month, candidates, decided, finalized, onFinalize, busy }) {
+function ChampionSelectionPanel({ month, candidates, decided, finalized, onFinalize, busy, onReopen, reopening }) {
   const [assignments, setAssignments] = useState({});
   const [expandedId, setExpandedId] = useState(null);
 
@@ -1258,6 +1281,14 @@ function ChampionSelectionPanel({ month, candidates, decided, finalized, onFinal
             </div>
           </details>
         )}
+        <button
+          onClick={onReopen}
+          disabled={reopening}
+          className="text-xs font-medium underline mt-3"
+          style={{ color: COLORS.textFaint, opacity: reopening ? 0.5 : 1 }}
+        >
+          {reopening ? "Reopening…" : "Reopen this month's decision"}
+        </button>
       </div>
     );
   }
@@ -1347,7 +1378,7 @@ function ChampionSelectionPanel({ month, candidates, decided, finalized, onFinal
   );
 }
 
-function CandidatePanel({ def, month, candidates, decided, winner, onSelect, busyId }) {
+function CandidatePanel({ def, month, candidates, decided, winner, onSelect, busyId, onReopen, reopening }) {
   const Icon = def.icon;
   const [expandedId, setExpandedId] = useState(null);
   return (
@@ -1374,6 +1405,16 @@ function CandidatePanel({ def, month, candidates, decided, winner, onSelect, bus
             </div>
           </button>
           {expandedId === winner.id && <NominationDetail record={winner} />}
+          <div className="px-4 pb-3">
+            <button
+              onClick={onReopen}
+              disabled={reopening}
+              className="text-xs font-medium underline"
+              style={{ color: COLORS.textFaint, opacity: reopening ? 0.5 : 1 }}
+            >
+              {reopening ? "Reopening…" : "Reopen this month's decision"}
+            </button>
+          </div>
         </div>
       ) : candidates.length === 0 ? (
         <p className="text-sm py-6 text-center" style={{ color: COLORS.textFaint }}>
@@ -1446,6 +1487,9 @@ function CandidatePanel({ def, month, candidates, decided, winner, onSelect, bus
 function GmSelectionView({ profile, nominations, refresh }) {
   const [busyId, setBusyId] = useState(null);
   const [championBusy, setChampionBusy] = useState(false);
+  const [reopeningChampion, setReopeningChampion] = useState(false);
+  const [reopeningShiningStar, setReopeningShiningStar] = useState(false);
+  const [heroDeleting, setHeroDeleting] = useState(false);
   const [monthFilter, setMonthFilter] = useState(currentMonthValue());
   const [showHeroForm, setShowHeroForm] = useState(false);
 
@@ -1460,6 +1504,14 @@ function GmSelectionView({ profile, nominations, refresh }) {
   }
 
   async function handleSelect(record) {
+    const year = monthFilter.slice(0, 4);
+    const prior = findPriorWinInYear(nominations, record.nominee.clockNo, year, record.id);
+    if (prior) {
+      const ok = window.confirm(
+        `${record.nominee.name} already won ${AWARD_TYPES[prior.awardType].name} in ${formatMonthLabel(prior.month)} this year.\n\nSelect them again anyway?`
+      );
+      if (!ok) return;
+    }
     setBusyId(record.id);
     try {
       await selectWinner(record, profile.full_name);
@@ -1470,17 +1522,63 @@ function GmSelectionView({ profile, nominations, refresh }) {
   }
 
   async function handleFinalizeChampion(assignments) {
+    const year = monthFilter.slice(0, 4);
+    const list = CHAMPION_SLOTS.filter((slot) => assignments[slot.key]).map((slot) => ({
+      id: assignments[slot.key],
+      division: slot.division,
+      rank: slot.rank,
+    }));
+
+    const warnings = [];
+    for (const item of list) {
+      const candidate = championCandidates.find((c) => c.id === item.id);
+      if (!candidate) continue;
+      const prior = findPriorWinInYear(nominations, candidate.nominee.clockNo, year, candidate.id);
+      if (prior) {
+        warnings.push(`${candidate.nominee.name} already won ${AWARD_TYPES[prior.awardType].name} in ${formatMonthLabel(prior.month)}`);
+      }
+    }
+    if (warnings.length > 0) {
+      const ok = window.confirm(`${warnings.join("\n")}\n\nContinue anyway?`);
+      if (!ok) return;
+    }
+
     setChampionBusy(true);
     try {
-      const list = CHAMPION_SLOTS.filter((slot) => assignments[slot.key]).map((slot) => ({
-        id: assignments[slot.key],
-        division: slot.division,
-        rank: slot.rank,
-      }));
       await finalizeChampionSelections(monthFilter, list, profile.full_name);
       await refresh();
     } finally {
       setChampionBusy(false);
+    }
+  }
+
+  async function handleReopenChampion() {
+    setReopeningChampion(true);
+    try {
+      await reopenMonth("champion", monthFilter, profile.full_name);
+      await refresh();
+    } finally {
+      setReopeningChampion(false);
+    }
+  }
+
+  async function handleReopenShiningStar() {
+    setReopeningShiningStar(true);
+    try {
+      await reopenMonth("shiningStar", monthFilter, profile.full_name);
+      await refresh();
+    } finally {
+      setReopeningShiningStar(false);
+    }
+  }
+
+  async function handleDeleteHero(id) {
+    setHeroDeleting(true);
+    try {
+      await deleteNomination(id);
+      await refresh();
+    } finally {
+      setHeroDeleting(false);
     }
   }
 
@@ -1526,6 +1624,8 @@ function GmSelectionView({ profile, nominations, refresh }) {
             finalized={championFinalized}
             onFinalize={handleFinalizeChampion}
             busy={championBusy}
+            onReopen={handleReopenChampion}
+            reopening={reopeningChampion}
           />
         </div>
 
@@ -1537,6 +1637,8 @@ function GmSelectionView({ profile, nominations, refresh }) {
           winner={shiningStar.winner}
           onSelect={handleSelect}
           busyId={busyId}
+          onReopen={handleReopenShiningStar}
+          reopening={reopeningShiningStar}
         />
       </div>
 
@@ -1551,6 +1653,7 @@ function GmSelectionView({ profile, nominations, refresh }) {
           <GmHeroForm
             month={monthFilter}
             profile={profile}
+            allNominations={nominations}
             onCancel={() => setShowHeroForm(false)}
             onSubmitted={async () => {
               await refresh();
@@ -1562,9 +1665,17 @@ function GmSelectionView({ profile, nominations, refresh }) {
             <div className="font-semibold" style={{ color: COLORS.text }}>
               {heroThisMonth.nominee.name}
             </div>
-            <div className="text-xs" style={{ color: COLORS.textMuted }}>
+            <div className="text-xs mb-2" style={{ color: COLORS.textMuted }}>
               {heroThisMonth.nominee.level} · {heroThisMonth.department} · {heroThisMonth.totalScore}/{HERO_MAX_SCORE} · finalized by {heroThisMonth.decidedBy}
             </div>
+            <button
+              onClick={() => handleDeleteHero(heroThisMonth.id)}
+              disabled={heroDeleting}
+              className="text-xs font-medium underline"
+              style={{ color: COLORS.textFaint, opacity: heroDeleting ? 0.5 : 1 }}
+            >
+              {heroDeleting ? "Removing…" : "Remove & re-nominate"}
+            </button>
           </div>
         ) : (
           <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1948,6 +2059,7 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
   const [monthFilter, setMonthFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [yearAwardFilter, setYearAwardFilter] = useState("all");
   const [divisionFilter, setDivisionFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
 
@@ -1959,23 +2071,9 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
     .filter((n) => (monthFilter === "all" ? true : n.month === monthFilter))
     .filter((n) => (typeFilter === "all" ? true : n.awardType === typeFilter))
     .filter((n) => (statusFilter === "all" ? true : n.status === statusFilter))
+    .filter((n) => (yearAwardFilter === "all" ? true : n.yearAward === yearAwardFilter))
     .filter((n) => (divisionFilter === "all" ? true : n.division === divisionFilter))
     .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
-
-  const hasActiveFilters =
-    yearFilter !== "all" ||
-    monthFilter !== "all" ||
-    typeFilter !== "all" ||
-    statusFilter !== "all" ||
-    divisionFilter !== "all";
-
-  function clearAllFilters() {
-    setYearFilter("all");
-    setMonthFilter("all");
-    setTypeFilter("all");
-    setStatusFilter("all");
-    setDivisionFilter("all");
-  }
 
   const totals = {
     all: nominations.length,
@@ -2033,16 +2131,11 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
           <option value="foh">Front of the House only</option>
           <option value="boh">Back of the House only</option>
         </select>
-        {hasActiveFilters && (
-          <button
-            onClick={clearAllFilters}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium"
-            style={{ background: "transparent", border: `1px solid ${COLORS.textFaint}`, color: COLORS.textMuted }}
-          >
-            <X size={14} />
-            Clear filters
-          </button>
-        )}
+        <select value={yearAwardFilter} onChange={(e) => setYearAwardFilter(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
+          <option value="all">All (yearly award)</option>
+          <option value="winner">Award of the Year — Winner</option>
+          <option value="runner_up">Award of the Year — Runner-up</option>
+        </select>
       </div>
 
       {filtered.length === 0 ? (
