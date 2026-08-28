@@ -18,6 +18,7 @@ import {
   LogOut,
   Users,
   Trophy,
+  X,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import {
@@ -1963,6 +1964,23 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
     .filter((n) => (divisionFilter === "all" ? true : n.division === divisionFilter))
     .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
+  const hasActiveFilters =
+    yearFilter !== "all" ||
+    monthFilter !== "all" ||
+    typeFilter !== "all" ||
+    statusFilter !== "all" ||
+    yearAwardFilter !== "all" ||
+    divisionFilter !== "all";
+
+  function clearAllFilters() {
+    setYearFilter("all");
+    setMonthFilter("all");
+    setTypeFilter("all");
+    setStatusFilter("all");
+    setYearAwardFilter("all");
+    setDivisionFilter("all");
+  }
+
   const totals = {
     all: nominations.length,
     submitted: nominations.filter((n) => n.status === "submitted").length,
@@ -2024,6 +2042,16 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
           <option value="winner">Award of the Year — Winner</option>
           <option value="runner_up">Award of the Year — Runner-up</option>
         </select>
+        {hasActiveFilters && (
+          <button
+            onClick={clearAllFilters}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium"
+            style={{ background: "transparent", border: `1px solid ${COLORS.textFaint}`, color: COLORS.textMuted }}
+          >
+            <X size={14} />
+            Clear filters
+          </button>
+        )}
       </div>
 
       {filtered.length === 0 ? (
