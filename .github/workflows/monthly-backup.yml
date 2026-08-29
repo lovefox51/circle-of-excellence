@@ -21,19 +21,31 @@ jobs:
       - name: Export nominations
         run: |
           mkdir -p backups
-          curl -sSf \
+          status=$(curl -sS -o backups/nominations-$(date +%Y-%m-%d).json -w "%{http_code}" \
             "${{ secrets.SUPABASE_URL }}/rest/v1/nominations?select=*" \
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -o "backups/nominations-$(date +%Y-%m-%d).json"
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}")
+          echo "HTTP status: $status"
+          echo "Response body:"
+          cat "backups/nominations-$(date +%Y-%m-%d).json"
+          if [ "$status" -ge 400 ]; then
+            echo "::error::Request failed with HTTP $status — see response body above"
+            exit 1
+          fi
 
       - name: Export profiles (accounts & departments)
         run: |
-          curl -sSf \
+          status=$(curl -sS -o backups/profiles-$(date +%Y-%m-%d).json -w "%{http_code}" \
             "${{ secrets.SUPABASE_URL }}/rest/v1/profiles?select=*" \
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -o "backups/profiles-$(date +%Y-%m-%d).json"
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}")
+          echo "HTTP status: $status"
+          echo "Response body:"
+          cat "backups/profiles-$(date +%Y-%m-%d).json"
+          if [ "$status" -ge 400 ]; then
+            echo "::error::Request failed with HTTP $status — see response body above"
+            exit 1
+          fi
 
       - name: Commit the backup files
         run: |
