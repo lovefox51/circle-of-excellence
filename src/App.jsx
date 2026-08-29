@@ -807,35 +807,31 @@ function GmHeroForm({ month, profile, onCancel, onSubmitted, allNominations }) {
 
 function NewNominationTab({ profile, nominations, refresh }) {
   const [pickedAward, setPickedAward] = useState(null);
-  const [showHeroForm, setShowHeroForm] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(null);
 
   const canDeptHead = profile.roles.includes("deptHead");
-  const canGm = profile.roles.includes("gm");
 
-  if (!canDeptHead && !canGm) {
+  if (!canDeptHead) {
     return <EmptyState icon={Send} title="No nomination permissions" body="Your account isn't set up to submit nominations. Contact P&C if this looks wrong." />;
   }
 
   if (justSubmitted) {
     const def = AWARD_TYPES[justSubmitted.awardType];
-    const isHero = justSubmitted.awardType === "hero";
     return (
       <div className="flex flex-col items-center text-center py-16 px-6">
         <span className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: `${COLORS.good}22`, color: COLORS.good }}>
           <CheckCircle2 size={26} />
         </span>
         <h3 className="font-semibold text-lg mb-1" style={{ color: COLORS.text, fontFamily: "Fraunces, serif" }}>
-          {isHero ? "Hero of the Month finalized" : "Sent to P&C"}
+          Sent to P&C
         </h3>
         <p className="text-sm max-w-sm mb-6" style={{ color: COLORS.textMuted }}>
-          {justSubmitted.nominee.name} {isHero ? "is now this month's Hero of the Month." : `is now in the P&C queue for ${def.name}, ${formatMonthLabel(justSubmitted.month)}.`}
+          {justSubmitted.nominee.name} is now in the P&C queue for {def.name}, {formatMonthLabel(justSubmitted.month)}.
         </p>
         <button
           onClick={() => {
             setJustSubmitted(null);
             setPickedAward(null);
-            setShowHeroForm(false);
           }}
           className="px-5 py-2.5 rounded-xl text-sm font-semibold"
           style={{ background: COLORS.gold, color: "#1A1406" }}
@@ -846,7 +842,7 @@ function NewNominationTab({ profile, nominations, refresh }) {
     );
   }
 
-  if (canDeptHead && pickedAward) {
+  if (pickedAward) {
     return (
       <DeptHeadForm
         awardType={pickedAward}
@@ -860,40 +856,9 @@ function NewNominationTab({ profile, nominations, refresh }) {
     );
   }
 
-  if (canGm && showHeroForm) {
-    return (
-      <GmHeroForm
-        month={currentMonthValue()}
-        profile={profile}
-        allNominations={nominations}
-        onCancel={() => setShowHeroForm(false)}
-        onSubmitted={async (record) => {
-          await refresh();
-          setJustSubmitted(record);
-        }}
-      />
-    );
-  }
-
   return (
     <div className="space-y-8">
-      {canDeptHead && <AwardPicker types={["champion", "shiningStar"]} onPick={setPickedAward} />}
-      {canGm && (
-        <div className="flex flex-col items-center text-center py-10 px-6 rounded-2xl" style={{ background: COLORS.panel, border: `1px solid ${COLORS.hairline}` }}>
-          <span className="inline-flex items-center justify-center w-14 h-14 rounded-full mb-4" style={{ background: `${COLORS.hero}26`, color: COLORS.hero }}>
-            <Flame size={24} />
-          </span>
-          <h3 className="font-semibold text-lg mb-1" style={{ color: COLORS.text, fontFamily: "Fraunces, serif" }}>
-            Hero of the Month is yours to give
-          </h3>
-          <p className="text-sm max-w-sm mb-6" style={{ color: COLORS.textMuted }}>
-            Chosen directly from the leadership pool — no P&C step, no forwarding.
-          </p>
-          <button onClick={() => setShowHeroForm(true)} className="px-6 py-3 rounded-xl font-semibold text-sm" style={{ background: COLORS.hero, color: "#241205" }}>
-            Nominate Hero of the Month
-          </button>
-        </div>
-      )}
+      <AwardPicker types={["champion", "shiningStar"]} onPick={setPickedAward} />
     </div>
   );
 }
@@ -1491,6 +1456,7 @@ function GmSelectionView({ profile, nominations, refresh }) {
   const [reopeningChampion, setReopeningChampion] = useState(false);
   const [reopeningShiningStar, setReopeningShiningStar] = useState(false);
   const [heroDeleting, setHeroDeleting] = useState(false);
+  const [heroDeleteError, setHeroDeleteError] = useState("");
   const [monthFilter, setMonthFilter] = useState(currentMonthValue());
   const [showHeroForm, setShowHeroForm] = useState(false);
 
@@ -1575,9 +1541,12 @@ function GmSelectionView({ profile, nominations, refresh }) {
 
   async function handleDeleteHero(id) {
     setHeroDeleting(true);
+    setHeroDeleteError("");
     try {
       await deleteNomination(id);
       await refresh();
+    } catch (e) {
+      setHeroDeleteError(e.message || "Couldn't remove this entry. Please try again.");
     } finally {
       setHeroDeleting(false);
     }
@@ -1677,6 +1646,11 @@ function GmSelectionView({ profile, nominations, refresh }) {
             >
               {heroDeleting ? "Removing…" : "Remove & re-nominate"}
             </button>
+            {heroDeleteError && (
+              <div className="flex items-center gap-1.5 mt-2 text-xs" style={{ color: COLORS.bad }}>
+                <AlertTriangle size={12} /> {heroDeleteError}
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex items-center justify-between flex-wrap gap-3">
@@ -2172,7 +2146,7 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
 /* ---------------------------------------------------------------------- */
 
 function MainApp({ profile, onSignOut }) {
-  const [tab, setTab] = useState("new");
+  const [tab, setTab] = useState(profile.roles.includes("deptHead") ? "new" : profile.roles.includes("pnc") ? "pnc" : "gm");
   const [nominations, setNominations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -2205,7 +2179,7 @@ function MainApp({ profile, onSignOut }) {
   const canSeeDashboard = profile.roles.includes("pnc") || profile.roles.includes("gm");
 
   const tabs = [
-    { key: "new", label: "New Nomination", icon: PlusCircle },
+    ...(profile.roles.includes("deptHead") ? [{ key: "new", label: "New Nomination", icon: PlusCircle }] : []),
     { key: "pnc", label: "P&C Queue", icon: Send, badge: pncBadge },
     { key: "gm", label: "GM Selection", icon: Crown, badge: gmBadge },
     ...(profile.roles.includes("gm") ? [{ key: "yearly", label: "Award of the Year", icon: Trophy }] : []),
