@@ -231,7 +231,7 @@ function heroTotalScore(scores) {
 // Has this person (by Clock No.) already won any award this calendar year?
 // Used to warn the General Manager before picking a repeat winner.
 function findPriorWinInYear(nominations, clockNo, year, excludeId) {
-  if (!clockNo) return null;
+  if (!clockNo || !nominations) return null;
   return nominations.find(
     (n) =>
       n.nominee.clockNo === clockNo &&
@@ -805,7 +805,7 @@ function GmHeroForm({ month, profile, onCancel, onSubmitted, allNominations }) {
 /*  New Nomination tab — content depends on the logged-in profile's roles  */
 /* ---------------------------------------------------------------------- */
 
-function NewNominationTab({ profile, refresh }) {
+function NewNominationTab({ profile, nominations, refresh }) {
   const [pickedAward, setPickedAward] = useState(null);
   const [showHeroForm, setShowHeroForm] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(null);
@@ -865,6 +865,7 @@ function NewNominationTab({ profile, refresh }) {
       <GmHeroForm
         month={currentMonthValue()}
         profile={profile}
+        allNominations={nominations}
         onCancel={() => setShowHeroForm(false)}
         onSubmitted={async (record) => {
           await refresh();
@@ -2267,7 +2268,7 @@ function MainApp({ profile, onSignOut }) {
           ) : loadError ? (
             <EmptyState icon={AlertTriangle} title="Couldn't load data" body={loadError} />
           ) : tab === "new" ? (
-            <NewNominationTab profile={profile} refresh={loadData} />
+            <NewNominationTab profile={profile} nominations={nominations} refresh={loadData} />
           ) : tab === "pnc" ? (
             <PncQueueView profile={profile} nominations={nominations} refresh={loadData} onPhotoUpload={handlePhotoUpload} />
           ) : tab === "gm" ? (
