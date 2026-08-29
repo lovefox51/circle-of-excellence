@@ -2059,7 +2059,6 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
   const [monthFilter, setMonthFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [yearAwardFilter, setYearAwardFilter] = useState("all");
   const [divisionFilter, setDivisionFilter] = useState("all");
   const [expandedId, setExpandedId] = useState(null);
 
@@ -2071,7 +2070,6 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
     .filter((n) => (monthFilter === "all" ? true : n.month === monthFilter))
     .filter((n) => (typeFilter === "all" ? true : n.awardType === typeFilter))
     .filter((n) => (statusFilter === "all" ? true : n.status === statusFilter))
-    .filter((n) => (yearAwardFilter === "all" ? true : n.yearAward === yearAwardFilter))
     .filter((n) => (divisionFilter === "all" ? true : n.division === divisionFilter))
     .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
@@ -2130,11 +2128,6 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
           <option value="all">Front &amp; Back of the House</option>
           <option value="foh">Front of the House only</option>
           <option value="boh">Back of the House only</option>
-        </select>
-        <select value={yearAwardFilter} onChange={(e) => setYearAwardFilter(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
-          <option value="all">All (yearly award)</option>
-          <option value="winner">Award of the Year — Winner</option>
-          <option value="runner_up">Award of the Year — Runner-up</option>
         </select>
       </div>
 
