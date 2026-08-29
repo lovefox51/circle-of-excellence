@@ -1,0 +1,44 @@
+name: Monthly Data Backup
+
+# Exports every nomination once a month into the /backups folder of this
+# repo, so there's always a recent copy of the data outside the live
+# database (the free Supabase plan keeps zero backups of its own).
+
+on:
+  schedule:
+    - cron: "0 3 1 * *"   # 03:00 UTC on the 1st of every month
+  workflow_dispatch: {}     # lets you trigger it manually from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Export nominations
+        run: |
+          mkdir -p backups
+          curl -sSf \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/nominations?select=*" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -o "backups/nominations-$(date +%Y-%m-%d).json"
+
+      - name: Export profiles (accounts & departments)
+        run: |
+          curl -sSf \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/profiles?select=*" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -o "backups/profiles-$(date +%Y-%m-%d).json"
+
+      - name: Commit the backup files
+        run: |
+          git config user.name "backup-bot"
+          git config user.email "backup-bot@users.noreply.github.com"
+          git add backups/
+          git commit -m "Automated monthly backup $(date +%Y-%m-%d)" || echo "Nothing new to back up"
+          git push
