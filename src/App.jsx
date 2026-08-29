@@ -2129,6 +2129,21 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
           <option value="foh">Front of the House only</option>
           <option value="boh">Back of the House only</option>
         </select>
+        {(yearFilter !== "all" || monthFilter !== "all" || typeFilter !== "all" || statusFilter !== "all" || divisionFilter !== "all") && (
+          <button
+            onClick={() => {
+              setYearFilter("all");
+              setMonthFilter("all");
+              setTypeFilter("all");
+              setStatusFilter("all");
+              setDivisionFilter("all");
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium"
+            style={{ background: COLORS.panelAlt, color: COLORS.textMuted, border: `1px solid ${COLORS.hairline}` }}
+          >
+            <XCircle size={14} /> Reset filters
+          </button>
+        )}
       </div>
 
       {filtered.length === 0 ? (
