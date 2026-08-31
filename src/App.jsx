@@ -18,6 +18,7 @@ import {
   LogOut,
   Users,
   Trophy,
+  Printer,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import {
@@ -2081,6 +2082,74 @@ function StatCard({ label, value, color }) {
   );
 }
 
+// Builds a clean, printable HTML report of every decided winner for one
+// month, and opens it in a new tab ready for the browser's print dialog.
+function printMonthlyReport(month, nominations) {
+  const inMonth = (n) => n.month === month;
+  const champion = nominations.filter((n) => n.awardType === "champion" && inMonth(n) && (n.status === "winner" || n.status === "runner_up"));
+  const shiningStar = nominations.filter((n) => n.awardType === "shiningStar" && inMonth(n) && n.status === "winner");
+  const hero = nominations.filter((n) => n.awardType === "hero" && inMonth(n) && n.status === "winner");
+
+  const row = (label, r) => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #ddd;">
+        ${r.photoUrl ? `<img src="${r.photoUrl}" style="width:44px;height:44px;border-radius:50%;object-fit:cover;display:block;" />` : `<div style="width:44px;height:44px;border-radius:50%;background:#eee;"></div>`}
+      </td>
+      <td style="padding:8px 12px;border-bottom:1px solid #ddd;">${label}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #ddd;font-weight:600;">${r.nominee.name}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #ddd;">${r.department}</td>
+    </tr>`;
+
+  let rows = "";
+  const fohWinner = champion.find((r) => r.division === "foh" && r.status === "winner");
+  const fohRunner = champion.find((r) => r.division === "foh" && r.status === "runner_up");
+  const bohWinner = champion.find((r) => r.division === "boh" && r.status === "winner");
+  const bohRunner = champion.find((r) => r.division === "boh" && r.status === "runner_up");
+  if (fohWinner) rows += row("Champion — Front of the House (Winner)", fohWinner);
+  if (fohRunner) rows += row("Champion — Front of the House (Runner-up)", fohRunner);
+  if (bohWinner) rows += row("Champion — Back of the House (Winner)", bohWinner);
+  if (bohRunner) rows += row("Champion — Back of the House (Runner-up)", bohRunner);
+  shiningStar.forEach((r) => (rows += row("Shining Star of the Month", r)));
+  hero.forEach((r) => (rows += row("Hero of the Month", r)));
+
+  if (!rows) {
+    rows = `<tr><td colspan="4" style="padding:16px;color:#888;text-align:center;">No winners decided yet for ${formatMonthLabel(month)}.</td></tr>`;
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Circle of Excellence — ${formatMonthLabel(month)} Winners</title>
+<style>
+  body { font-family: Georgia, 'Times New Roman', serif; color: #1A2038; margin: 40px; }
+  h1 { font-size: 22px; margin-bottom: 2px; }
+  h2 { font-size: 14px; font-weight: normal; color: #666; margin-top: 0; }
+  table { width: 100%; border-collapse: collapse; margin-top: 24px; }
+  th { text-align: left; padding: 8px 12px; background: #1A2038; color: #fff; font-size: 12px; }
+  th:first-child { width: 60px; }
+  img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  @media print { body { margin: 15mm; } }
+</style>
+</head>
+<body>
+  <h1>Circle of Excellence</h1>
+  <h2>Winners Report — ${formatMonthLabel(month)}</h2>
+  <table>
+    <thead><tr><th>Photo</th><th>Award</th><th>Winner</th><th>Department</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
 function DashboardView({ nominations, profile, onPhotoUpload }) {
   const [yearFilter, setYearFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
@@ -2170,6 +2239,15 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
             style={{ background: COLORS.panelAlt, color: COLORS.textMuted, border: `1px solid ${COLORS.hairline}` }}
           >
             <XCircle size={14} /> Reset filters
+          </button>
+        )}
+        {monthFilter !== "all" && (
+          <button
+            onClick={() => printMonthlyReport(monthFilter, nominations)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold"
+            style={{ background: COLORS.gold, color: "#1A1406" }}
+          >
+            <Printer size={14} /> Print {formatMonthLabel(monthFilter)} report
           </button>
         )}
       </div>
