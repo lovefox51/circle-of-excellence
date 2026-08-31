@@ -2136,7 +2136,17 @@ function printMonthlyReport(month, nominations) {
 </style>
 <script>
   window.onload = function () {
-    setTimeout(function () { window.print(); }, 300);
+    var imgs = Array.prototype.slice.call(document.images);
+    var pending = imgs.filter(function (img) { return !img.complete; });
+    function go() { window.print(); }
+    if (pending.length === 0) { go(); return; }
+    var remaining = pending.length;
+    function done() { remaining -= 1; if (remaining <= 0) go(); }
+    pending.forEach(function (img) {
+      img.addEventListener('load', done);
+      img.addEventListener('error', done);
+    });
+    setTimeout(go, 4000); // fallback in case an image hangs
   };
 </script>
 </head>
