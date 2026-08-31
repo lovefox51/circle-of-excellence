@@ -2043,7 +2043,7 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
   const filtered = nominations
     .filter((n) => (yearFilter === "all" ? true : n.month.split("-")[0] === yearFilter))
     .filter((n) => (monthFilter === "all" ? true : n.month === monthFilter))
-    .filter((n) => (typeFilter === "all" ? true : n.awardType === typeFilter))
+    .filter((n) => (typeFilter === "all" ? true : typeFilter === "yearWinner" ? !!n.yearAward : n.awardType === typeFilter))
     .filter((n) => (statusFilter === "all" ? true : n.status === statusFilter))
     .filter((n) => (divisionFilter === "all" ? true : n.division === divisionFilter))
     .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
@@ -2090,6 +2090,7 @@ function DashboardView({ nominations, profile, onPhotoUpload }) {
               {d.name}
             </option>
           ))}
+          <option value="yearWinner">Year Winner (Award of the Year)</option>
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ ...inputStyle, width: "auto" }}>
           <option value="all">All statuses</option>
