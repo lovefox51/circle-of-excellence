@@ -2158,6 +2158,15 @@ function printMonthlyReport(month, nominations) {
     <thead><tr><th>Photo</th><th>Award</th><th>Winner</th><th>Clock No.</th><th>Department</th><th>Position</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
+
+  <div style="margin-top:64px;display:flex;justify-content:flex-end;">
+    <div style="width:260px;text-align:center;">
+      <div style="border-top:1px solid #1A2038;padding-top:8px;">
+        <div style="font-weight:600;">General Manager</div>
+        <div style="font-size:11px;color:#666;margin-top:2px;">Signature &amp; Date</div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>`;
 
