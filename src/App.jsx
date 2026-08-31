@@ -2097,7 +2097,9 @@ function printMonthlyReport(month, nominations) {
       </td>
       <td style="padding:8px 12px;border-bottom:1px solid #ddd;">${label}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #ddd;font-weight:600;">${r.nominee.name}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #ddd;">${r.nominee.clockNo || ""}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #ddd;">${r.department}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #ddd;">${r.nominee.position || ""}</td>
     </tr>`;
 
   let rows = "";
@@ -2113,7 +2115,7 @@ function printMonthlyReport(month, nominations) {
   hero.forEach((r) => (rows += row("Hero of the Month", r)));
 
   if (!rows) {
-    rows = `<tr><td colspan="4" style="padding:16px;color:#888;text-align:center;">No winners decided yet for ${formatMonthLabel(month)}.</td></tr>`;
+    rows = `<tr><td colspan="6" style="padding:16px;color:#888;text-align:center;">No winners decided yet for ${formatMonthLabel(month)}.</td></tr>`;
   }
 
   const html = `
@@ -2132,12 +2134,17 @@ function printMonthlyReport(month, nominations) {
   img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   @media print { body { margin: 15mm; } }
 </style>
+<script>
+  window.onload = function () {
+    setTimeout(function () { window.print(); }, 300);
+  };
+</script>
 </head>
 <body>
   <h1>Circle of Excellence</h1>
   <h2>Winners Report — ${formatMonthLabel(month)}</h2>
   <table>
-    <thead><tr><th>Photo</th><th>Award</th><th>Winner</th><th>Department</th></tr></thead>
+    <thead><tr><th>Photo</th><th>Award</th><th>Winner</th><th>Clock No.</th><th>Department</th><th>Position</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
 </body>
@@ -2147,7 +2154,6 @@ function printMonthlyReport(month, nominations) {
   win.document.write(html);
   win.document.close();
   win.focus();
-  win.print();
 }
 
 function DashboardView({ nominations, profile, onPhotoUpload }) {
