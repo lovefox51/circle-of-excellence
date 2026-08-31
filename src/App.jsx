@@ -2151,6 +2151,7 @@ function printMonthlyReport(month, nominations) {
 </script>
 </head>
 <body>
+  <img src="https://circle-of-excellence.vercel.app/radisson-blu-doha-logo.png" alt="Radisson Blu Doha" style="height:50px;margin-bottom:16px;" />
   <h1>Circle of Excellence</h1>
   <h2>Winners Report — ${formatMonthLabel(month)}</h2>
   <table>
