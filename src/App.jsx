@@ -228,6 +228,23 @@ function heroTotalScore(scores) {
   return Object.values(scores || {}).reduce((sum, v) => sum + (Number(v) || 0), 0);
 }
 
+// Builds a specific label for a yearly award badge, e.g. "Champion of the
+// Year — Front of the House (Winner)" instead of just "Year Winner".
+function yearAwardLabel(record) {
+  if (!record.yearAward) return null;
+  const rank = record.yearAward === "winner" ? "Winner" : "Runner-up";
+  if (record.awardType === "champion") {
+    return `Champion of the Year — ${DIVISION_LABEL[record.division] || ""} (${rank})`;
+  }
+  if (record.awardType === "shiningStar") {
+    return "Shining Star of the Year";
+  }
+  if (record.awardType === "hero") {
+    return "Hero of the Year";
+  }
+  return `Year ${rank}`;
+}
+
 // Has this person (by Clock No.) already won any award this calendar year?
 // Used to warn the General Manager before picking a repeat winner.
 function findPriorWinInYear(nominations, clockNo, year, excludeId) {
@@ -1031,7 +1048,7 @@ function NominationRow({ record, expanded, onToggle, actions, profile, onPhotoUp
             className="text-[10px] font-semibold px-2 py-1 rounded-full whitespace-nowrap flex items-center gap-1"
             style={{ background: `${COLORS.gold}26`, color: COLORS.gold }}
           >
-            <Trophy size={10} /> {record.yearAward === "winner" ? "Year Winner" : "Year Runner-up"}
+            <Trophy size={10} /> {yearAwardLabel(record)}
           </span>
         )}
         <ChevronDown size={16} style={{ color: COLORS.textFaint, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
