@@ -1054,6 +1054,8 @@ function PncQueueView({ profile, nominations, refresh, onPhotoUpload }) {
   const [expandedId, setExpandedId] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [busyAll, setBusyAll] = useState(false);
+  const [rejectingId, setRejectingId] = useState(null);
+  const [rejectError, setRejectError] = useState("");
 
   if (!profile.roles.includes("pnc")) {
     return <EmptyState icon={Send} title="P&C-only queue" body="Your account isn't set up to forward nominations to the General Manager." />;
@@ -1082,6 +1084,23 @@ function PncQueueView({ profile, nominations, refresh, onPhotoUpload }) {
     }
   }
 
+  async function handleReject(record) {
+    const ok = window.confirm(
+      `Reject and delete ${record.nominee.name}'s nomination?\n\nThis removes it completely — the Department Head will need to submit a new one. This cannot be undone.`
+    );
+    if (!ok) return;
+    setRejectingId(record.id);
+    setRejectError("");
+    try {
+      await deleteNomination(record.id);
+      await refresh();
+    } catch (e) {
+      setRejectError(e.message || "Couldn't reject this nomination. Please try again.");
+    } finally {
+      setRejectingId(null);
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
@@ -1096,6 +1115,12 @@ function PncQueueView({ profile, nominations, refresh, onPhotoUpload }) {
         )}
       </div>
 
+      {rejectError && (
+        <div className="flex items-center gap-2 mb-4 text-sm" style={{ color: COLORS.bad }}>
+          <AlertTriangle size={15} /> {rejectError}
+        </div>
+      )}
+
       {pending.length === 0 ? (
         <EmptyState icon={CheckCircle2} title="Nothing waiting to be forwarded" body="New Department Head submissions will appear here." />
       ) : (
@@ -1109,14 +1134,24 @@ function PncQueueView({ profile, nominations, refresh, onPhotoUpload }) {
               profile={profile}
               onPhotoUpload={onPhotoUpload}
               actions={
-                <button
-                  onClick={() => forwardOne(record)}
-                  disabled={busyId === record.id}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold"
-                  style={{ background: COLORS.champion, color: "#0D1B2A" }}
-                >
-                  <Send size={14} /> Forward to General Manager
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => forwardOne(record)}
+                    disabled={busyId === record.id || rejectingId === record.id}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold"
+                    style={{ background: COLORS.champion, color: "#0D1B2A" }}
+                  >
+                    <Send size={14} /> Forward to General Manager
+                  </button>
+                  <button
+                    onClick={() => handleReject(record)}
+                    disabled={busyId === record.id || rejectingId === record.id}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold"
+                    style={{ background: `${COLORS.bad}1A`, color: COLORS.bad, opacity: rejectingId === record.id ? 0.6 : 1 }}
+                  >
+                    <XCircle size={14} /> {rejectingId === record.id ? "Rejecting…" : "Reject"}
+                  </button>
+                </div>
               }
             />
           ))}
